@@ -235,7 +235,7 @@
 }
 
 /* Public site design tokens. Admin pages keep their existing styling. */
-html.dark:has(.site-shell) { color-scheme: dark; scrollbar-color: #222 #050505; }
+html.dark:has(.site-shell) { color-scheme: dark; scrollbar-color: #222 #000; }
 html:not(.dark):has(.site-shell) { color-scheme: light; scrollbar-color: #ddd #fff; }
 .site-shell {
   --site-bg: #fff;
@@ -248,8 +248,6 @@ html:not(.dark):has(.site-shell) { color-scheme: light; scrollbar-color: #ddd #f
   --site-link: #000;
   color: var(--site-text);
   background-color: var(--site-bg);
-  background-image: radial-gradient(#dedede 0.8px, transparent 1px);
-  background-size: 15px 15px;
   min-height: 100dvh;
   font-family: var(--font-site-sans), Arial, sans-serif;
   font-size: 16px;
@@ -260,7 +258,7 @@ html:not(.dark):has(.site-shell) { color-scheme: light; scrollbar-color: #ddd #f
 .site-shell > main { flex: 1; }
 
 html.dark .site-shell {
-  --site-bg: #050505;
+  --site-bg: #000;
   --site-text: #bbbbbb;
   --site-muted: #a8a8a8;
   --site-subtle: #929292;
@@ -268,7 +266,6 @@ html.dark .site-shell {
   --site-hover: #1d1d1d;
   --site-strong: #ddd;
   --site-link: #fff;
-  background-image: radial-gradient(#212121 0.8px, transparent 1px);
 }
 html.dark .site-shell .site-title,
 html.dark .site-shell .site-section-heading,
@@ -418,13 +415,7 @@ html:not(.dark) .site-shell .site-brand { color: #111; }
   .site-shell *, .site-shell *::before, .site-shell *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
 
-/* Generative art lives in its own layer and fades beneath the reading column. */
-.site-shell { background-image: none; }
 .site-header, .site-shell > main { position: relative; z-index: 1; }
-.home-page > :not(canvas), .archive-page > :not(canvas) { position: relative; z-index: 1; }
-.generative-background { position: fixed; inset: 0; pointer-events: none; width: 100vw; height: 100dvh; z-index: 0; }
-.generative-background--roots { mask-image: radial-gradient(ellipse 54% 78% at 50% 48%, transparent 42%, #000 88%); }
-.home-page .generative-background--roots { opacity: .8; }
 .home-affiliation { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 16px; color: var(--site-text); font-size: 15px; }
 .home-affiliation + .home-bio { margin-top: 14px; }
 .home-affiliation a { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px 1px 4px; border-radius: 3px; background: var(--site-hover); color: var(--site-muted); text-decoration: none; font-size: 14px; }
@@ -491,7 +482,6 @@ html:not(.dark) .site-shell .site-brand { color: #111; }
   .project-grid { grid-template-columns: 1fr; gap: 2px; }
   .archive-year h2 { height: 95px; margin-left: -10px; font-size: 86px; }
   .archive-post-title { font-size: 16px; }
-  .generative-background--roots { opacity: .58; }
 }
 @media (max-width: 850px) {
   .site-desktop-socials { display: none; }
