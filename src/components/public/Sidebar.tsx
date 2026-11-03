@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { GithubLogoIcon } from '@phosphor-icons/react/ssr';
+import { GitHubMarkIcon } from './GitHubMarkIcon';
 
 interface TopCategory {
   id: string;
@@ -246,7 +246,7 @@ export function PublicSidebar() {
               title="GitHub"
               aria-label="GitHub"
             >
-              <GithubLogoIcon size={16} weight="regular" aria-hidden="true" />
+              <GitHubMarkIcon size={16} aria-hidden="true" />
             </Link>
             {layoutData.admin.profile?.instagramLink && (
               <Link
