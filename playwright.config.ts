@@ -10,7 +10,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  reporter: [['list'], ['json', { file: '/tmp/cora/evidence/admin-playwright/results.json' }]],
+  reporter: [['list'], ['json', { outputFile: '/tmp/cora/evidence/admin-playwright/results.json' }]],
   use: {
     baseURL,
     trace: 'off',

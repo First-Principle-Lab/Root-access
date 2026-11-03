@@ -676,6 +676,81 @@ colour in `src/components/admin/**` + `src/app/admin/**` is unchanged at 29 matc
 literals in 5 files, none in `profileForm.ts` or `profileManager.tsx`. `after-github-link/` holds the
 12 screenshots with `capture-notes.txt`; logs in `/tmp/cora/evidence/admin-run-iter8/`.
 
+### 4.8 Automated test suite (checkpoint 8)
+
+Three layers, all committed under `tests/`, all running against the isolated `rootaccess_admin_dev`
+database and the *built* app (`npm run build` then `npx next start -p 3099`), never against fixtures:
+
+| Layer | Files | Tests | What the tests are about |
+| --- | --- | --- | --- |
+| unit (`tests/unit/`) | 9 | 94 | pure logic only: `src/lib/postFilters.ts` (20 - zod query parse, `status` → `where.published`, search, order, page/limit clamps, page metadata, page-number gap markers, active-filter rule), `src/lib/postEditor.ts` (25 - draft round trip, `fieldsForStyle`, the three style-specific validations, dirty detection, payload), `src/components/admin/subsections/subsectionFilters.ts` (9), `…/profile/profileForm.ts` (14), `…/dashboard/{overviewRows,recentEdits}` (7), `src/lib/githubLink.ts` + a real `renderToStaticMarkup` of `SocialLinks` (6), `…/shell/{adminRoutes}` (6 - the `/admin/subsections` vs `/admin/sections` prefix trap), `src/lib/api.ts`'s `requestFailureMessage` (3), `src/components/admin/contentTypes.ts` (4) |
+| API integration (`tests/integration/`) | 4 | 24 | the real `route.ts` handlers imported directly: `GET /api/admin/posts` (9 - 401 without a session, every filter, ordering, paging metadata, 400 on a malformed query, totals against the seed), the same handler with the database down (1 - a 500 with a message, never a 200 with an empty array), `GET /api/admin/stats` (4), `PATCH/GET /api/admin/profile` + `githubLink` (10 - four invalid URL shapes rejected with a `githubLink` entry in `errors` and nothing stored, valid URL accepted and served by `/api/public/layout`, explicit `null` clears, absent leaves the column, unrelated columns survive) |
+| browser (`tests/e2e/`) | 7 | 71 | authenticated through the real `POST /api/admin/login` (`tests/e2e/helpers/adminAuth.ts`, never a fabricated token): shell/navigation/theme (17), controls and dialogs (6), content screens against seeded data (15), the post list on one endpoint (8), the post editor lifecycle (10), `githubLink` end to end (6), the failure paths below (9) |
+
+Failure-path coverage, which is the part of the acceptance table most easily skipped. "Real" means the
+server itself refused; "simulated" means the request was intercepted and answered in the exact shape
+that route returns (the file and line of that shape is in the test's comment):
+
+| Named failure | Where | Test | Answer |
+| --- | --- | --- | --- |
+| list read fails | `/admin/posts` | `admin-post-list.spec.ts` → *a failed list is an error with a retry, never an empty list* | simulated 500 |
+| list read fails | `/admin/subsections` | `admin-failure-paths.spec.ts` → *a subsection list that fails is an error with a retry, not an empty tree* | simulated 500 on the sections read the tree is built from |
+| dashboard read fails | `/admin` | `admin-content-screens.spec.ts` → *a failed dashboard request is reported instead of rendering zeros* | simulated 500 |
+| profile save fails | `/admin/profile` | `admin-content-screens.spec.ts` → *a failed profile save keeps what was typed* | simulated 500 on `PATCH` |
+| tag create fails | `/admin/tags` | `admin-controls.spec.ts` → *a failed save keeps the typed value and puts the error on the field* | simulated 400 duplicate |
+| section create fails | `/admin/sections` | `admin-failure-paths.spec.ts` → *a duplicate name is refused by the real API on the field, and adds nothing* | **real** 409 (`sections/route.ts:31`) |
+| subsection create fails | `/admin/subsections` | → *a duplicate name inside the same section is refused and every input is kept* | **real** 409 (`subsections/route.ts:48`) |
+| post save fails | post editor | `admin-post-editor.spec.ts` → *a failed save says so and keeps every field* | simulated 500 |
+| cover upload fails | post editor | → *a failed cover upload reports it and leaves the form alone* | **real** 500 (no Cloudinary credentials here) |
+| picture upload fails | `/admin/profile` | `admin-failure-paths.spec.ts` → *a failed picture upload is reported, keeps the typed bio, and stores nothing* | **real** 500 |
+| section delete fails | `/admin/sections` | → *a delete that fails says so, names the section, and leaves it listed after a reload* | simulated 500 |
+| subsection delete refused | `/admin/subsections` | → *a subsection that still holds posts refuses the delete and stays in its section* | **real** 409 (`subsections/[slug]/route.ts:151`) |
+| tag delete refused | `/admin/tags` | `admin-controls.spec.ts` → *a refused delete is reported inline and the tag stays* | simulated 409 |
+| post delete fails | `/admin/posts` | `admin-failure-paths.spec.ts` → *a delete that fails keeps the post and names it in the error* | simulated 500 |
+| publish fails | `/admin/posts` | → *a publish that fails keeps the post published and says it is unchanged* | simulated 500 on `PATCH` |
+| cancel changes nothing | tags, sections, posts, editor | `admin-controls.spec.ts` → *…changes nothing on cancel*; `admin-post-list.spec.ts` → *canceling the delete confirmation changes nothing*; `admin-failure-paths.spec.ts` → *canceling the section delete sends nothing and changes nothing* (asserts an empty list of `DELETE` requests); `admin-post-editor.spec.ts` → *leaving with unsaved changes asks, keeps editing on cancel, and saves nothing* | real |
+| unsaved input retained | profile, tags, editor, upload | each failing test above re-reads the control (`aria-invalid`, `aria-describedby` → the error text, and the input's live value) | as above |
+
+Nothing here restates markup. Every browser assertion is about state that outlives the render - a
+count read back from `/api/admin/sections`, `/api/admin/posts` or `/api/admin/profile` after the
+action; a request count (the fan-out proof, one list call instead of one per subsection); a request
+that is never issued (cancel); an address after a slug-changing save; `aria-current`, `aria-expanded`,
+`aria-describedby`, `aria-invalid`; focus trapped and restored; 44px targets; zero horizontal overflow
+at 375/768/1440. Class names and element trees are never asserted, and the only HTML-shape test
+(`tests/unit/public-github-link.test.ts`) exists because the rendered `href` *is* the requirement.
+
+Rerunning it (new `test` scripts in `package.json`):
+
+```bash
+export HOME=/root PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+npm run build && (setsid nohup npx next start -p 3099 >/tmp/cora/server.log 2>&1 </dev/null &)
+PGPASSWORD=rootaccess psql -h 127.0.0.1 -U rootaccess -d rootaccess_admin_dev -f /tmp/cora/seed.sql
+npx vitest run          # 118 tests, 13 files
+npx playwright test     # 71 tests, 7 files
+```
+
+Run record for this checkpoint (all on the same tree; full output and JSON in
+`/tmp/cora/evidence/admin-run-iter9/`):
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `npx vitest run` | exit 0, 118/118 passed, 13 files | `vitest-full.log`, `vitest-results.json` |
+| `npx playwright test` | exit 0, 71/71 passed in 56s, 0 flaky | `playwright-full.log`, `playwright-results.json` |
+| `npx tsc --noEmit` | exit 0 | `tsc.log` |
+| `npx eslint .` | 34 errors / 20 warnings (baseline 48 / 24); the new spec itself reports 0 problems | `eslint-full.log`, `eslint-newfile.log` |
+| `npm run build` | exit 0 | `build.log` |
+| database after the whole suite | 6 sections / 7 subsections / 17 posts / 4 tags / 12 published, `Profile` at its seeded values | `reseed-after-suite.log` |
+
+Two suites deliberately leave the database exactly as `/tmp/cora/seed.sql` wrote it: the lifecycle
+tests delete what they create in `finally`, the refusal tests are answered before a write, and
+`afterEach` sweeps any `E2E ` tag. `tests/e2e/` contains no probe or scratch specs, because the runner
+collects everything in that directory.
+
+**Not proven by tests, still.** The image-upload *success* path (no Cloudinary credentials in this
+environment), and the public DOM reflecting a just-edited profile value inside the 60-second revalidate
+window (see §4.7); both are asserted as far as they can be - the failure half, and the uncached
+`/api/public/layout` read.
+
 ### Colour
 
 | Token | Dark | Light | Use |
