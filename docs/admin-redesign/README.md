@@ -4,7 +4,9 @@ Phase 1 of `docs/admin-redesign-plan.md`. This folder holds the pre-change audit
 `/admin`, the design specification that phase 2 and 3 build against, and the two
 representative mockups (dashboard, post editor) at desktop and mobile widths in both
 themes. Nothing here changes application code; the tokens and rules below are the
-contract for the implementation checkpoints.
+contract for the implementation checkpoints. Update: checkpoint 2 (the admin token set) is
+now implemented in `src/app/admin/admin.css`; §4.1 records what shipped, what later
+checkpoints still have to consume, and the measurements that prove it.
 
 Everything was captured on the pre-change tree at commit `3b4d897`
 (`origin/dev` + test tooling) against the isolated database `rootaccess_admin_dev`
@@ -136,11 +138,87 @@ Deliberately **not** carried over:
 
 ## 4. Token specification
 
-Implemented in phase 2 as a `.admin-shell` block inside `src/app/globals.css` (public
-selectors untouched), driven by the `dark` class that `next-themes` already writes.
+Implemented as a dedicated admin stylesheet, `src/app/admin/admin.css`, imported once by
+`src/app/admin/layout.tsx` so it loads on every `/admin` route and nowhere else. The plan
+allowed "`src/app/globals.css` or a dedicated admin stylesheet"
+([`docs/admin-redesign-plan.md`:31](../admin-redesign-plan.md)) and asked for the scope to
+stay "separate from `.site-shell` to prevent public regressions"; the separate file keeps
+`src/app/globals.css` **byte-identical to baseline**, which is the strongest possible form
+of that requirement, and it is the named integration point for the "public CSS unchanged"
+check in checkpoint 9. Colour tokens hang off `body:has(.admin-shell)` rather than
+`.admin-shell` itself because custom properties inherit: the body-level scope puts every
+`--admin-*` token on the element that also paints the page background (so overscroll,
+native form controls and any portal mounted on `document.body` see the same palette) while
+`.admin-shell` stays the class components opt into. Light values are the default block and
+`html.dark body:has(.admin-shell)` overrides them, i.e. the same convention as
+`globals.css:240-269`, driven only by the `dark` class `next-themes` already writes.
 The values below are exactly what
 [`mockups/admin-mock.css`](mockups/admin-mock.css) renders with, so the mockups are a
 live preview of the token set.
+
+### 4.1 What is implemented, and how it was verified
+
+`src/app/admin/admin.css` (new) contains, in order: theme-independent tokens (font, type
+scale, spacing scale, layout measures, border/radius/shadow, focus ring, form metrics,
+motion); the light colour set; the dark colour set; the `.admin-shell` base rules; the
+`849px` gutter/panel override; and the `prefers-reduced-motion` switch copied in shape from
+`globals.css:414-416`. No public generative/tree background rule is carried over.
+
+The first consumer is the shell: `src/components/admin/adminLayout.tsx` now uses
+`bg-[color:var(--admin-bg)]`, `border-[color:var(--admin-border)]`,
+`text-[color:var(--admin-muted)]`, `bg-[color:var(--admin-scrim)]`,
+`rounded-[var(--admin-radius-control)]`, `text-[length:var(--admin-text-meta)]` and friends
+instead of literals, and its root element carries the `admin-shell` class.
+
+Verification on the built tree (`npx next start -p 3099`, seeded DB, `admin@test.local`),
+full output in `/tmp/cora/evidence/cp2-tokens.log` — 85 checks, all pass:
+
+| Check | Result |
+| --- | --- |
+| Every one of the 21 colour tokens resolves to the specified value, both themes, on a real `/admin` page | pass (`--admin-bg` #050505/#ffffff, `--admin-text` #bbbbbb/#555555, …) |
+| All 34 metric tokens (type, spacing, layout, radius, focus, form, motion) resolve to a non-empty value | pass |
+| `.admin-shell` computed background/colour = `--admin-bg` / `--admin-text`; `font-family` resolves to `Inter`; `14px / 1.5`; `tabular-nums` on | pass |
+| Theme is now live on the admin: the dark and light 1440×900 shell screenshots differ (they were md5-identical in §1) | pass |
+| `color-scheme` and `scrollbar-color` follow the theme; `--admin-gutter`/`--admin-panel-pad` drop to 16px at 375px; 0 horizontal overflow at 375px | pass |
+| Keyboard focus shows the token ring: 2px solid `--admin-heading`, offset 2px | pass |
+| Admin contains 0 `.generative-background` and 0 `.site-shell` nodes; public routes contain 0 `.admin-shell` nodes | pass |
+| Public tokens unchanged: `/` still computes `--site-bg` #050505/#ffffff and `--site-text` #bbbbbb/#555555; `src/app/globals.css` has an empty `git diff` | pass |
+| `npm run build` exit 0; `npx eslint` on both touched files → 0 problems (both were 0 at baseline) | pass |
+
+Screenshots: `/tmp/cora/evidence/cp2-admin-1440-{dark,light}.png` and
+`cp2-admin-375-{dark,light}.png`. They intentionally show a half-converted admin — the
+shell is tokenised, the dashboard cards are not yet — which is the phase-2/phase-3 boundary.
+
+**Hard-coded colour census** (`grep -oE '#[0-9a-fA-F]{3,8}\b' src/components/admin`):
+304 literals in 20 files at baseline → **294 in 17 files** now, i.e. zero added and the
+10 in `adminLayout.tsx` removed. Written exceptions, all of them pre-existing and all
+slated for removal by the checkpoint named: `post/PostEditModal.tsx` 46 and
+`post/postForm.tsx` 45 (checkpoint 6 editor), `subsections/SubSection.tsx` 39 +
+`SubSectionFilter.tsx` 3, `profile/profileManager.tsx` 27 (checkpoint 5),
+`post/MarkDownEditor.tsx` 19, `section/sectionManager.tsx` 18,
+`auth/SignUpPage.tsx` 16 + `auth/LoginPage.tsx` 12 (checkpoint 3 login/signup),
+`tags/tagsManager.tsx` 15, `dashboard/adminDashboard.tsx` 14,
+`post/postListItem.tsx` 11, `post/postCard.tsx` 6, `post/filterBar.tsx` 4,
+`post/PostsManager.tsx` 4, `post/blogPost.tsx` 1. `subsections/EmojiPicker.tsx` 14 are
+string literals inside emoji data, not colours. Two further colour-bearing files sit
+outside the checkpoint's grep scope and are handled later: `src/components/ui/Spinner.tsx`
+(`#0a0a0a`, `#2a2a2a`, used by `FullScreenLoader`, which renders *outside* the shell and is
+replaced by the admin loading state in checkpoint 4) and the `bg-black/50`-style Tailwind
+palette classes that the converted pages will drop as they move onto tokens.
+
+Two implementation traps worth recording, both measured rather than assumed. (1) An admin
+rule written **outside** a CSS layer outranks every Tailwind utility in the document
+(unlayered author styles beat all `@layer`ed ones regardless of specificity), which silently
+killed `text-[color:var(--admin-muted)]` on nav links until the `.admin-shell` element rules
+were wrapped in `@layer base`. (2) Inside `@layer base` the same cascade runs the other way:
+a probe on `/admin/profile` showed an input carrying `focus:outline-none` computing
+`outline-style: none` (the utilities layer wins over base regardless of specificity), so the
+`:focus-visible` ring is deliberately the one rule kept unlayered. With it unlayered the same
+probe computes `2px solid` in `--admin-heading` with a 2px offset on that legacy input in
+both themes — recorded in `cp2-tokens.log` as the "legacy focus control" checks — which is
+what holds the accessibility row up while unconverted pages still strip their own outlines.
+A component that later needs a different ring must declare it in `admin.css`, not with a
+utility.
 
 ### Colour
 

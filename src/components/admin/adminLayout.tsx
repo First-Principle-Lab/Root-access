@@ -55,11 +55,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="admin-shell min-h-screen bg-[color:var(--admin-bg)]">
       {/* Mobile Menu Button */}
       <button
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        className="md:hidden fixed top-4 left-4 z-50 w-10 h-10 bg-[#101010] border border-[#1a1a1a] rounded-lg flex items-center justify-center text-white"
+        className="md:hidden fixed top-4 left-4 z-50 w-10 h-10 bg-[color:var(--admin-surface)] border border-[color:var(--admin-border)] rounded-[var(--admin-radius-control)] flex items-center justify-center text-[color:var(--admin-heading)]"
       >
         {mobileMenuOpen ? (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -75,14 +75,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       {/* Mobile Overlay */}
       {mobileMenuOpen && (
         <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          className="md:hidden fixed inset-0 bg-[color:var(--admin-scrim)] z-40"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        w-64 md:w-48 bg-[#0a0a0a] min-h-screen border-r border-[#1a1a1a]
+        w-64 md:w-48 bg-[color:var(--admin-bg)] min-h-screen border-r border-[color:var(--admin-border)]
         md:fixed md:left-0 md:top-0
         fixed left-0 top-0 z-40 transform transition-transform duration-300
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
@@ -95,10 +95,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               className="flex items-center gap-2 hover:opacity-70 transition"
               onClick={() => setMobileMenuOpen(false)}
             >
-              <div className="w-5 h-5 rounded-full bg-neutral-700 flex items-center justify-center">
+              <div className="w-5 h-5 rounded-full bg-[color:var(--admin-surface-2)] border border-[color:var(--admin-border)] flex items-center justify-center">
                 <span className="text-[10px]">⚙️</span>
               </div>
-              <span className="text-white text-[14px] font-normal">Admin</span>
+              <span className="text-[color:var(--admin-heading)] text-[length:var(--admin-text-body)] font-medium">Admin</span>
             </Link>
           </div>
 
@@ -111,10 +111,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] transition ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-[var(--admin-radius-control)] text-[length:var(--admin-text-meta)] transition ${
                     isActive
-                      ? 'bg-[#1a1a1a] text-white'
-                      : 'text-[#707070] hover:text-white hover:bg-[#1a1a1a]'
+                      ? 'bg-[color:var(--admin-surface-2)] text-[color:var(--admin-heading)] font-medium'
+                      : 'text-[color:var(--admin-muted)] hover:text-[color:var(--admin-heading)] hover:bg-[color:var(--admin-hover)]'
                   }`}
                 >
                   <span className="opacity-60">{item.icon}</span>
@@ -128,7 +128,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <div className="absolute bottom-4 md:bottom-6 left-4 md:left-6 right-4 md:right-6">
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] text-[#707070] hover:text-white hover:bg-[#1a1a1a] transition"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-[var(--admin-radius-control)] text-[length:var(--admin-text-meta)] text-[color:var(--admin-muted)] hover:text-[color:var(--admin-heading)] hover:bg-[color:var(--admin-hover)] transition"
             >
               <span>Logout</span>
             </button>
