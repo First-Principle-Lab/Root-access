@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { GithubLogoIcon } from '@phosphor-icons/react/ssr';
 
 interface TopCategory {
   id: string;
@@ -91,12 +92,7 @@ export function PublicSidebar() {
   }
 
   const hasResume = layoutData.admin.profile?.resumeUrl;
-  const hasSocialLinks = layoutData.admin.profile && (
-    layoutData.admin.profile.xLink || 
-    layoutData.admin.profile.linkedinLink || 
-    layoutData.admin.profile.instagramLink ||
-    layoutData.admin.profile.email
-  );
+  const hasSocialLinks = Boolean(layoutData.admin.profile);
 
   return (
     <aside className="w-48 bg-[#0a0a0a] min-h-screen fixed left-0 top-0 flex flex-col">
@@ -242,6 +238,16 @@ export function PublicSidebar() {
                 </svg>
               </Link>
             )}
+            <Link
+              href="https://github.com/parththirwani"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-neutral-600 hover:text-neutral-400 transition"
+              title="GitHub"
+              aria-label="GitHub"
+            >
+              <GithubLogoIcon size={16} weight="regular" aria-hidden="true" />
+            </Link>
             {layoutData.admin.profile?.instagramLink && (
               <Link
                 href={layoutData.admin.profile.instagramLink}

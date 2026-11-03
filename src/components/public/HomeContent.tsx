@@ -86,7 +86,7 @@ export function HomeContent({ profile, subsections, name, projects }: { profile:
         </section>
       )}
 
-      {profile && (profile.email || profile.xLink || profile.linkedinLink || profile.instagramLink) && (
+      {profile && (
         <section className="home-contact" aria-labelledby="contact-heading">
           <h2 id="contact-heading" className="site-section-heading">Find me on</h2>
           <SocialLinks profile={profile} />

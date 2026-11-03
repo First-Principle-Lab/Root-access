@@ -1,4 +1,4 @@
-import { EnvelopeSimpleIcon, InstagramLogoIcon, LinkedinLogoIcon, XLogoIcon } from '@phosphor-icons/react/ssr';
+import { EnvelopeSimpleIcon, GithubLogoIcon, InstagramLogoIcon, LinkedinLogoIcon, XLogoIcon } from '@phosphor-icons/react/ssr';
 
 export interface SocialProfile {
   email?: string | null;
@@ -12,6 +12,7 @@ export function SocialLinks({ profile, compact = false }: { profile: SocialProfi
     profile.email && { label: 'Email', href: `mailto:${profile.email}`, icon: EnvelopeSimpleIcon, external: false },
     profile.xLink && { label: 'X', href: profile.xLink, icon: XLogoIcon, external: true },
     profile.linkedinLink && { label: 'LinkedIn', href: profile.linkedinLink, icon: LinkedinLogoIcon, external: true },
+    { label: 'GitHub', href: 'https://github.com/parththirwani', icon: GithubLogoIcon, external: true },
     profile.instagramLink && { label: 'Instagram', href: profile.instagramLink, icon: InstagramLogoIcon, external: true },
   ].filter((link): link is Exclude<typeof link, null | undefined | ''> => Boolean(link));
 
