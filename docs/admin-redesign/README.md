@@ -312,13 +312,27 @@ Two deliberate decisions inside the primitives:
   discovered is the wrong order for a modal: the drawer sits *below* the bar on purpose, a
   modal must not.
 
-Emoji policy applied: chrome emoji are gone (`postListItem`, `postForm`, `PostEditModal`,
-`SubSection` badges, the `✕` close/remove controls in both editors, the `❝`/`🔗` markdown
-toolbar buttons, the dashboard's four stat-card emoji). What remains is *data*:
-`src/components/admin/subsections/EmojiPicker.tsx` and the `Subsection.icon` column it edits
-(rendered in the subsection list and in `<option>` text, where only text is allowed), plus the
-`icon: '📄'` form default that seeds that column. The stored-value reads are marked
+Emoji policy applied. The acceptance grep is:
+
+```
+$ grep -rnoP "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}]" src/components/admin --include=*.tsx \
+    | grep -v "subsections/EmojiPicker.tsx"
+src/components/admin/subsections/SubSection.tsx:21:📄
+```
+
+One hit outside `EmojiPicker.tsx` (the file the grep excludes, whose palette is emoji by
+definition because it edits an emoji column). That single hit is the `DEFAULT_SUBSECTION_ICON`
+constant, and the picker itself is the only other place with any: both are stored data, not
+chrome. Chrome emoji are gone — `postListItem`, `postForm`, `PostEditModal`, `SubSection` (the
+display-style picker and the row badges), the close and remove controls in both editors, the
+blockquote and link markdown toolbar buttons, the dashboard's four stat-card glyphs, and the six
+nav icons (checkpoint 3). What stays
+is what the database holds: `Subsection.icon` is an emoji column (`prisma/schema.prisma:46`)
+edited by `EmojiPicker.tsx`, whose palette therefore has to contain emoji; it renders in the
+subsection list and as `<option>` text, where only text is allowed. Those reads are marked
 `aria-hidden` so a screen reader does not announce a picture of a keyboard as content.
+`adminNav.tsx` no longer even quotes the emoji it replaced, because the grep above is the
+acceptance check.
 
 No `confirm()` or `alert()` call site is left under `src/components/admin`. The words still
 appear in code comments that record what was replaced, so the search skips comment lines:

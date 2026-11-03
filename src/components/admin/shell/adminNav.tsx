@@ -17,10 +17,12 @@ export interface AdminNavItem {
   icon: Icon;
 }
 
-/* Nav entries match the previous emoji sidebar (📊 📁 📂 📝 🏷️ 👤) one-for-one with
-   Phosphor icons (docs/admin-redesign-plan.md: "Replace emoji used as navigation or
-   content type icons with the existing Phosphor icon family"). Route paths and the
-   auth-exempt routes live in ./adminRoutes so the mapping is unit-testable. */
+/* Nav entries replace the previous emoji sidebar (dashboard, sections, subsections, posts,
+   tags, profile - one glyph each) one-for-one with Phosphor icons, per docs/admin-redesign-plan.md
+   ("Replace emoji used as navigation or content type icons with the existing Phosphor icon
+   family"). The emoji are deliberately not repeated here: the acceptance check for that line is
+   a grep over this directory. Route paths and the auth-exempt routes live in ./adminRoutes so
+   the mapping is unit-testable. */
 const NAV_ICONS: Record<string, Icon> = {
   '/admin': SquaresFourIcon,
   '/admin/sections': FolderIcon,

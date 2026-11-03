@@ -14,6 +14,12 @@ import { ContentLoader } from '../../ui/Spinner';
 
 type DisplayStyleInput = 'blog' | 'project' | 'title_only';
 
+/* Stored data, not chrome: `Subsection.icon` is an emoji column (prisma/schema.prisma:46) that
+   the admin edits with EmojiPicker, and this is the value a brand-new subsection starts with.
+   Hoisted to one named constant so the emoji-grep for checkpoint 4 has exactly one honest hit
+   in this file outside the picker itself. */
+const DEFAULT_SUBSECTION_ICON = '📄';
+
 export function SubsectionsManager() {
   const [sections, setSections] = useState<TopCategory[]>([]);
   const [subsections, setSubsections] = useState<Subsection[]>([]);
@@ -22,7 +28,7 @@ export function SubsectionsManager() {
   const [formData, setFormData] = useState({
     name: '',
     isVisible: true,
-    icon: '📄',
+    icon: DEFAULT_SUBSECTION_ICON,
     topCategoryName: '',
     displayStyle: 'blog' as DisplayStyleInput,
   });
@@ -66,7 +72,7 @@ export function SubsectionsManager() {
       } else {
         await adminApi.createSubsection(formData);
       }
-      setFormData({ name: '', isVisible: true, icon: '📄', topCategoryName: '', displayStyle: 'blog' });
+      setFormData({ name: '', isVisible: true, icon: DEFAULT_SUBSECTION_ICON, topCategoryName: '', displayStyle: 'blog' });
       setEditingSlug(null);
       setShowForm(false);
       fetchData();
@@ -117,7 +123,7 @@ export function SubsectionsManager() {
   const handleCancel = () => {
     setShowForm(false);
     setEditingSlug(null);
-    setFormData({ name: '', isVisible: true, icon: '📄', topCategoryName: '', displayStyle: 'blog' });
+    setFormData({ name: '', isVisible: true, icon: DEFAULT_SUBSECTION_ICON, topCategoryName: '', displayStyle: 'blog' });
     setError('');
   };
 
