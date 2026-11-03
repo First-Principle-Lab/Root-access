@@ -1,0 +1,28 @@
+cp5-dashboard-1440-dark.png  overflow=0 h1="Dashboard" bytes=76186  PageHeader + Content overview + draft notice + Recently edited
+cp5-dashboard-error-1440-dark.png  overflow=0 h1="Dashboard" bytes=32166  AdminErrorState with retry where the baseline rendered 0s
+cp5-subsections-1440-dark.png  overflow=0 h1="Subsections" bytes=104811  PageHeader + filter row + section -> subsection tree
+cp5-subsections-filtered-1440-dark.png  overflow=0 h1="Subsections" bytes=45024  search=engineer -> 1 of 7, group header still names the parent section
+cp5-subsections-form-1440-dark.png  overflow=0 h1="Subsections" bytes=139609  FormSection + AdminField + radio display-style group + EmojiPicker on tokens
+cp5-profile-1440-dark.png  overflow=0 h1="Profile" bytes=85809  Picture/Bio/Contact/Social/Resume groups + sticky save area
+cp5-profile-unsaved-1440-dark.png  overflow=0 h1="Profile" bytes=84360  sticky save bar reads "Unsaved changes"
+cp5-dashboard-375-dark.png  overflow=0 h1="Dashboard" bytes=49424  PageHeader + Content overview + draft notice + Recently edited
+cp5-dashboard-error-375-dark.png  overflow=0 h1="Dashboard" bytes=18147  AdminErrorState with retry where the baseline rendered 0s
+cp5-subsections-375-dark.png  overflow=0 h1="Subsections" bytes=87273  PageHeader + filter row + section -> subsection tree
+cp5-subsections-filtered-375-dark.png  overflow=0 h1="Subsections" bytes=31686  search=engineer -> 1 of 7, group header still names the parent section
+cp5-subsections-form-375-dark.png  overflow=0 h1="Subsections" bytes=119980  FormSection + AdminField + radio display-style group + EmojiPicker on tokens
+cp5-profile-375-dark.png  overflow=0 h1="Profile" bytes=69564  Picture/Bio/Contact/Social/Resume groups + sticky save area
+cp5-profile-unsaved-375-dark.png  overflow=0 h1="Profile" bytes=67693  sticky save bar reads "Unsaved changes"
+cp5-dashboard-1440-light.png  overflow=0 h1="Dashboard" bytes=77225  PageHeader + Content overview + draft notice + Recently edited
+cp5-dashboard-error-1440-light.png  overflow=0 h1="Dashboard" bytes=32883  AdminErrorState with retry where the baseline rendered 0s
+cp5-subsections-1440-light.png  overflow=0 h1="Subsections" bytes=106190  PageHeader + filter row + section -> subsection tree
+cp5-subsections-filtered-1440-light.png  overflow=0 h1="Subsections" bytes=45988  search=engineer -> 1 of 7, group header still names the parent section
+cp5-subsections-form-1440-light.png  overflow=0 h1="Subsections" bytes=141251  FormSection + AdminField + radio display-style group + EmojiPicker on tokens
+cp5-profile-1440-light.png  overflow=0 h1="Profile" bytes=86470  Picture/Bio/Contact/Social/Resume groups + sticky save area
+cp5-profile-unsaved-1440-light.png  overflow=0 h1="Profile" bytes=84916  sticky save bar reads "Unsaved changes"
+cp5-dashboard-375-light.png  overflow=0 h1="Dashboard" bytes=49829  PageHeader + Content overview + draft notice + Recently edited
+cp5-dashboard-error-375-light.png  overflow=0 h1="Dashboard" bytes=18826  AdminErrorState with retry where the baseline rendered 0s
+cp5-subsections-375-light.png  overflow=0 h1="Subsections" bytes=88099  PageHeader + filter row + section -> subsection tree
+cp5-subsections-filtered-375-light.png  overflow=0 h1="Subsections" bytes=32220  search=engineer -> 1 of 7, group header still names the parent section
+cp5-subsections-form-375-light.png  overflow=0 h1="Subsections" bytes=120999  FormSection + AdminField + radio display-style group + EmojiPicker on tokens
+cp5-profile-375-light.png  overflow=0 h1="Profile" bytes=70213  Picture/Bio/Contact/Social/Resume groups + sticky save area
+cp5-profile-unsaved-375-light.png  overflow=0 h1="Profile" bytes=68255  sticky save bar reads "Unsaved changes"

@@ -36,3 +36,20 @@ export const updatePostSchema = z.object({
   // Project-specific field
   projectLink: z.string().url().optional().or(z.literal("")),
 });
+
+/* Query contract for the single authenticated post list endpoint
+   (src/app/api/admin/posts/route.ts, checkpoint 6 of docs/admin-redesign-plan.md). It replaces
+   the per-subsection fan-out, so the filters that used to live in PostsManager state now have a
+   server-side shape: status is one of three values (never a free string), `limit` is capped so a
+   client cannot ask for every post at once, and a malformed page/limit is a 400 rather than a
+   silently ignored parameter. */
+export const postListQuerySchema = z.object({
+  search: z.string().trim().max(200).optional(),
+  status: z.enum(["all", "published", "draft"]).optional().default("all"),
+  subsection: z.string().trim().min(1).optional(),
+  sort: z.enum(["updated", "created", "title"]).optional().default("updated"),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+});
+
+export type PostListQuery = z.infer<typeof postListQuerySchema>;

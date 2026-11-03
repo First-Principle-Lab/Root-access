@@ -377,7 +377,65 @@ checkpoints' work: `/admin/posts` and `/admin/subsections` still carry their bas
 hard-coded hex and 11px text, and in **light** mode their legacy white `h1` sits on white
 (`rgb(255,255,255)` on `rgb(255,255,255)`, measured) — the same "admin ignores the theme"
 defect recorded in §1, now visible on two specific headings. Checkpoints 5 and 6 replace both
-screens.
+screens. *(Update, §4.4: Subsections has since been converted — its `h1` and 11px text are gone —
+leaving `/admin/posts` as the last screen carrying that defect.)*
+
+
+### 4.4 Content screens delivered (checkpoint 5, in progress)
+
+Three of the six screens are rebuilt on the primitives — **dashboard**, **subsections** and
+**profile**. Sections and Tags were converted in §4.3. **Posts is not**, because that screen is
+checkpoint 6's functional work; §4.4 therefore does not claim checkpoint 5, and the two screens
+this section closes out were the last ones whose `h1` was white-on-white in light mode (§4.3
+"Open items").
+
+| File | What it is now | What it replaced |
+| --- | --- | --- |
+| `src/app/api/admin/stats/route.ts` | seven explicit counts: `sections`/`hiddenSections`, `subsections`/`hiddenSubsections`, `published`, `drafts`, `tags`, plus `totalPosts` | one `prisma.post.count({ published: true })` reported as "Posts", so 5 seeded drafts were invisible; the whole payload was three numbers and a guess |
+| `src/app/api/admin/posts/route.ts` + `src/lib/postFilters.ts` + `postListQuerySchema` in `src/schema/postsSchema.ts` | the single authenticated post list: `search` / `status` / `subsection` / `sort` / `page` / `limit`, validated by zod, `where` and `orderBy` built by pure functions, `total`/`totalPages` returned, 400 on a malformed query, 500 with a message on a database failure | nothing — the client asked for every subsection separately. It is the dashboard's "recently edited" source (`limit=5`) instead of a second bespoke query bolted onto the stats route |
+| `src/components/admin/dashboard/adminDashboard.tsx` + `overviewRows.ts` + `recentEdits.ts` | one overview list (published, drafts, sections + hidden, subsections + hidden, tags), each row a link to the screen that edits it; a draft notice; "Recently edited" with type icon, parent subsection, `Live`/`Draft` label, edited-when, `Edit` and (for published posts) a public-view link | four large stat cards (one of them wrong), a green `Live` button with an `animate-ping` dot that navigated to the site, and a "Quick Actions" panel of four links that went where the cards already went; `fetch()` instead of `adminApi`, and a `catch` that logged and showed four zeros |
+| `src/components/admin/subsections/SubSection.tsx` + `subsectionFilters.ts` | page header with one primary action; search + section + visibility filters; the list grouped under each **section heading** with its own visibility label; rows with stored icon, name, visibility, content-type badge, post count and public path; named `View`/`Edit`/`Delete` controls; radio-button display-style group; load failure now renders `AdminErrorState` with retry | a flat alphabetical list of seven rows that never said which section a subsection was in, no filters, a console-only failure, `border-2 bg-[#0a0a0a]` buttons standing in for radios, and 20 hard-coded hex values |
+| `src/components/admin/profile/profileManager.tsx` + `profileForm.ts` | five groups — Picture, Bio, Contact, Social links, Resume — each a `FormSection` of `AdminField`s; per-field URL/email validation before submit; a sticky save area that says "Unsaved changes"/"Everything on this page is saved."; `Discard changes`; upload failures reported with the form intact | one flat 300-line form, an opaque `Invalid data` 400 for a half-typed URL, `setTimeout`-erased success messages, and an upload whose error was thrown inside the `FileReader` callback so `uploading` never cleared and nothing was reported |
+| `src/components/ui/admin-filter-bar.tsx` | `role="search"` row that owns where filters sit (under the header, above the list) and where the result count sits | the first draft of this screen had its filters in a bespoke box |
+| `src/components/admin/subsections/EmojiPicker.tsx` | the picker's chrome (button, panel, tabs, paste field, 40px cells) on admin tokens, `aria-expanded` on the trigger, named cells; the emoji *palette data* and the stored `Subsection.icon` are untouched | 9 hex literals, 11px tab labels, an unnamed toggle |
+| `src/app/api/admin/profile/route.ts` | `data.x === undefined ? undefined : data.x` — an absent field is untouched, an explicit `null` clears | `data.x ?? undefined`, which swallowed the `null` the client sends for an emptied field, so "Delete the bio" saved successfully and changed nothing |
+| `src/hooks/useFocusTrap.ts` (checkpoint 3 delivery, fixed here) | the open panel owns every Tab press in both directions, cycling its own focusables | boundary-only interception: from the drawer's second-to-last item the browser moved focus to the page behind and the trap pulled it back one keydown later, so focus really did leave for one press. Measured on the pinned Chromium: ~1 run in 6 read `document.activeElement` inside that window and the shell's mobile-navigation test failed |
+
+Verification for this section, on the tree this commit leaves behind (`npm run build` exit 0,
+`npx tsc --noEmit` exit 0, `npx vitest run` 54/54 in 9 files, `npx playwright test` 36/36 on the
+built tree). Two Playwright gotchas were settled here: `page.reload({ waitUntil: 'networkidle' })`
+costs exactly 30s on the first reload of a page because Chromium answers it from cache and no
+network event ever arrives (the specs use `load` + auto-waiting assertions), and the mobile
+focus-trap test above was re-run 8x plus the dialog's 4x after the hook fix with no failure, where
+it had failed roughly once in six before it.
+
+| Thing asserted | How | Result |
+| --- | --- | --- |
+| The list endpoint refuses an anonymous caller | `GET /api/admin/posts` with no cookie through the real handler → 401 `Unauthorized` (`tests/integration/admin-post-list.test.ts`) | pass |
+| Filtering is server-side and additive | `status=published` ∪ `status=draft` = all, each equal to a raw `SELECT count(*)`; `subsection=projects`; `subsection=engineering` excludes its sibling `essays`; `status=draft&subsection=engineering`; `search=TRUNCATION` finds the seeded long-title post, `search=zzzz` returns `[]` with `total: 0` | pass, 5 tests |
+| Pagination neither drops nor repeats a row | 5-per-page walk over every page collecting ids into a set, asserting no id repeats and the set size equals the seeded total (the `id` tie-breaker in `buildPostListOrderBy` is what makes this hold on the seeded rows, which share one `updatedAt`) | pass |
+| A malformed query is a 400 that names itself | `status=everything`, `page=0`, `limit=5000`, `page=abc` → 400 + `Invalid <param>`; `?subsection=` is "no filter", not an error | pass |
+| A database failure is reported, not disguised as an empty list | `vi.mock` of the `post` delegates in `tests/integration/admin-post-list-error.test.ts` → 500 with a `message` and **no** `posts`/`total` keys | pass |
+| Dashboard numbers are the database's numbers | `GET /api/admin/stats` through the handler vs seven direct Prisma counts; `published + drafts === totalPosts`; hidden ≤ total (`tests/integration/admin-stats.test.ts`) | pass, 4 tests |
+| Dashboard renders seeded counts and has no "Live" control | Playwright: `rowFor('Published posts')` contains the API's `published`, …; `getByRole('button', { name: /^live$/i })` count 0; `.animate-ping` count 0; `View site` is a `target="_blank"` link | pass |
+| Subsections show the hierarchy and filter it | Playwright: `h2` "Writing" with the Engineering and Essays rows under it, `/engineering` path in the meta line, `search=projects` → "1 of 7 subsections" with the `Writing` group gone, `visibility=hidden` → the `Scratch` row, `Clear filters` → "7 of 7" | pass |
+| Profile groups the seeded values and saves them | Playwright: `h2`s Picture/Bio/Contact/Social links/Resume, email `hello@test.local`, X `https://x.com/parththirwani`, bio contains `CodeMate`, `Save profile` + "Everything on this page is saved." | pass |
+| A profile save really lands, and a cleared field really clears | Playwright against the isolated database: fill a unique bio + empty X, save, reload, `toHaveValue` both, then read `GET /api/admin/profile` and expect `bio` to be the marker and `xLink` to be `null`; the two touched columns are written back in a `finally` so the row ends at its seeded values (`tests/e2e/admin-content-screens.spec.ts`) | pass — this is the test the old `data.x ?? undefined` route would have failed |
+| Failure paths | dashboard with both requests aborted → `role="alert"` "…could not be reached…" + `Try again` and no fake zeros; profile with the `PATCH` answered 500 → the alert names the server message, the textarea keeps the typed sentence, "Unsaved changes" stays | pass, 2 tests |
+| New filtering/validation logic is unit-tested | 9 (`groupSubsections`, `isSubsectionFilterActive`), 7 (`buildOverviewRows`, `formatRelativeTime`, `publicPostPath`), 11 (`profileFormFromProfile`, `validateProfileForm`, `buildProfilePayload`, `isProfileDirty`), 3 (`requestFailureMessage`) = 30 new unit tests | pass |
+| No horizontal overflow on the converted screens | `overflow=0` recorded per screenshot at 1440x900 and 375x844 in both themes (`after-screens/capture-notes.txt`), plus a Playwright overflow check on all five converted routes at 375 | pass, 28 shots |
+| No new lint debt, less old debt | repo-wide `npx eslint .`: **36 errors / 22 warnings** (baseline 48/24, §4.3 38/24). Per-file comparison against `/tmp/cora/baseline/eslint-newbase.json` finds **no file with more problems than its baseline**; the -2/-2 since §4.3 is `profileManager.tsx`, whose two `catch (err: any)` errors, unused `profile` warning and `no-img-element` warning are gone (the last with a named, commented disable) | pass |
+| Public site untouched | `git diff --stat` over `src/app/globals.css`, `src/components/public/`, `src/app/(site)/`, `src/middleware.ts`, `src/lib/auth.ts`: empty | pass |
+| Admin colour debt keeps falling | `grep -rEoh "#[0-9a-fA-F]{3,8}\b" src/components/admin`: **163 literals in 11 files** (§4.3: 251 in 15). Zero now: `dashboard/`, `subsections/`, `profile/`. What is left is the posts screen (`postForm` 31, `PostEditModal` 31, `MarkDownEditor` 13, `postListItem` 5, `postCard` 4, `PostsManager` 3, `filterBar` 3, `blogPost` 1, `SubSectionFilter` 2 — checkpoint 6) and the two auth screens (21 — §7) | pass |
+
+Screenshots: `docs/admin-redesign/after-screens/` — 28 PNGs (dashboard, dashboard-error,
+subsections, subsections-filtered, subsections-form, profile, profile-unsaved) at 1440x900 and
+375x844 in dark and light, with `capture-notes.txt` recording each file's overflow, `h1` text and
+byte size.
+
+Still open for checkpoint 5: the **posts** screen (its rows, filters and editor belong to
+checkpoint 6), and the login/signup screens (§7). Once Posts is converted, checkpoint 5's evidence
+is the same two tables with the Posts row added.
 
 
 ### Colour
