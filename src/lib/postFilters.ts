@@ -96,6 +96,41 @@ export function buildPostListSearchParams(filters: PostListRequest): URLSearchPa
   return params;
 }
 
+/**
+ * Whether anything currently narrows the list. Drives the "Clear filters" control on
+ * `AdminFilterBar`, which must not appear on an unfiltered list (an inactive control that looks
+ * clickable is the mistake the baseline made with its always-present subsection select).
+ * `sort` is deliberately excluded: it reorders the same rows, it does not narrow them.
+ */
+export function isPostFilterActive(filters: PostListRequest): boolean {
+  return Boolean(
+    filters.search?.trim() ||
+      filters.subsection ||
+      (filters.status && filters.status !== 'all'),
+  );
+}
+
+/** A page in the footer, or the ellipsis standing in for the pages not shown. */
+export type PostListPageItem = number | 'gap';
+
+/**
+ * Page buttons for the list footer: first page, last page, the current page and its neighbours,
+ * with a gap where pages are skipped. The baseline had no pagination at all, so a real site with
+ * hundreds of posts rendered them all on one screen.
+ */
+export function buildPostListPageItems(page: number, totalPages: number): PostListPageItem[] {
+  if (totalPages <= 1) return totalPages === 1 ? [1] : [];
+  const wanted = new Set<number>([1, totalPages, page, page - 1, page + 1]);
+  const pages = [...wanted].filter((n) => n >= 1 && n <= totalPages).sort((a, b) => a - b);
+
+  const items: PostListPageItem[] = [];
+  pages.forEach((n, index) => {
+    if (index > 0 && n - pages[index - 1] > 1) items.push('gap');
+    items.push(n);
+  });
+  return items;
+}
+
 /** Page metadata for the list footer. An empty result is still one (empty) page. */
 export function buildPostListPageInfo(total: number, page: number, limit: number) {
   const totalPages = Math.max(1, Math.ceil(total / limit));

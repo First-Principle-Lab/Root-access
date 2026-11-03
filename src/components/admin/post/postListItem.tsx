@@ -1,91 +1,116 @@
-import { ArrowSquareOutIcon } from '@phosphor-icons/react';
-import { Post } from '@/src/types';
-import { contentTypeFor } from '@/src/components/admin/contentTypes';
+'use client';
+
+import Link from 'next/link';
+import { ArrowSquareOutIcon, TrashIcon } from '@phosphor-icons/react';
+import type { PostListItem } from '@/src/types';
+import { ContentTypeBadge } from '@/src/components/admin/contentTypeBadge';
+import { adminButtonClass, AdminButton } from '@/src/components/ui/admin-button';
 import { StatusLabel } from '@/src/components/ui/status-label';
+import { formatRelativeTime, publicPostPath } from '@/src/components/admin/dashboard/recentEdits';
 
-interface PostListItemProps {
-  post: Post;
-  onTogglePublish: (post: Post) => void;
-  onDelete: (post: Post) => void;
-  onEdit: (post: Post) => void;
+interface PostListItemRowProps {
+  post: PostListItem;
+  /** "Now" in epoch ms, captured once per list load by the screen. */
+  now: number | null;
+  busy?: boolean;
+  onEdit: (post: PostListItem) => void;
+  onTogglePublish: (post: PostListItem) => void;
+  onDelete: (post: PostListItem) => void;
 }
 
-export function PostListItem({ post, onTogglePublish, onDelete, onEdit }: PostListItemProps) {
+/* One row of the posts list (checkpoints 5 and 6 of docs/admin-redesign-plan.md). The baseline row
+   was hand-painted with the old dark-only palette, its tag chips sat below the 12px type floor and
+   its actions did not say which post they would change; it also only ever knew the subsection name,
+   so the section above it was invisible. Everything is a token or a primitive now, the hierarchy is
+   spelled out as "section / subsection", and every action carries the post title for assistive tech
+   while staying short on screen. */
+export function PostListItemRow({
+  busy = false,
+  now,
+  post,
+  onDelete,
+  onEdit,
+  onTogglePublish,
+}: PostListItemRowProps): React.ReactElement {
+  const hierarchy = [post.subsection.topCategory?.name, post.subsection.name].filter(Boolean).join(' / ');
+
   return (
-    <div className="bg-[#101010] p-4 sm:p-5 rounded-xl border border-[#1a1a1a] hover:border-[#2a2a2a] transition">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <h3 className="text-[15px] text-white font-medium truncate">{post.title}</h3>
-            <ContentTypeBadge displayStyle={post.subsection.displayStyle} />
-            <StatusLabel tone={post.published ? 'live' : 'draft'}>{post.published ? 'Published' : 'Draft'}</StatusLabel>
-          </div>
-          <div className="text-[13px] text-[#707070] mb-1">
-            {post.subsection.name} • {post.views} views
-            {post.subsection.displayStyle === 'PROJECT' && post.projectLink && (
-              <span className="ml-2">
-                •{' '}
-                <a
-                  className="inline-flex items-center gap-1 text-[color:var(--admin-info)] underline underline-offset-4 hover:text-[color:var(--admin-heading)]"
-                  href={post.projectLink}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  View project
-                  <ArrowSquareOutIcon aria-hidden="true" className="size-3.5" />
-                </a>
-              </span>
-            )}
-          </div>
-          {post.tags && post.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {post.tags.slice(0, 3).map((tag) => (
-                <span
-                  key={tag.id}
-                  className="px-2 py-0.5 bg-[#1a1a1a] text-[#707070] rounded text-[11px]"
-                >
-                  {tag.name}
-                </span>
-              ))}
-            </div>
+    <li
+      className="flex flex-wrap items-center gap-x-[var(--admin-space-4)] gap-y-[var(--admin-space-2)] border-t border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-[var(--admin-space-4)] py-[var(--admin-space-3)] transition-colors first:border-t-0 hover:bg-[color:var(--admin-hover)] focus-within:bg-[color:var(--admin-hover)] sm:px-[var(--admin-space-5)]"
+      data-slot="post-row"
+      data-published={post.published ? 'true' : 'false'}
+    >
+      <div className="min-w-[220px] flex-1 basis-[320px]">
+        <div className="flex flex-wrap items-center gap-x-[var(--admin-space-2)] gap-y-1">
+          <span className="min-w-0 max-w-full truncate text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)]">
+            {post.title}
+          </span>
+          <StatusLabel tone={post.published ? 'live' : 'draft'}>
+            {post.published ? 'Live' : 'Draft'}
+          </StatusLabel>
+          <ContentTypeBadge displayStyle={post.subsection.displayStyle} />
+        </div>
+        <p className="mt-0.5 truncate text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+          {hierarchy}
+          {now !== null && <> · edited {formatRelativeTime(post.updatedAt, now)}</>}
+          {post.subsection.displayStyle === 'PROJECT' && post.projectLink && (
+            <>
+              {' · '}
+              <a
+                className="text-[color:var(--admin-info)] underline underline-offset-4 transition-colors hover:text-[color:var(--admin-heading)]"
+                href={post.projectLink}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                project link
+              </a>
+            </>
           )}
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap sm:flex-nowrap">
-          <button
-            onClick={() => onEdit(post)}
-            className="px-3 py-1.5 text-[13px] bg-[#1a1a1a] text-white hover:bg-[#2a2a2a] rounded-lg transition touch-manipulation"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => onTogglePublish(post)}
-            className="px-3 py-1.5 text-[13px] text-[#707070] hover:text-white transition touch-manipulation"
-          >
-            {post.published ? 'Unpublish' : 'Publish'}
-          </button>
-          <button
-            onClick={() => onDelete(post)}
-            className="px-3 py-1.5 text-[13px] text-red-400 hover:text-red-300 transition touch-manipulation"
-          >
-            Delete
-          </button>
-        </div>
+        </p>
+        {post.tags.length > 0 && (
+          <ul className="mt-[var(--admin-space-2)] flex flex-wrap gap-[var(--admin-space-1)]">
+            {post.tags.slice(0, 4).map((tag) => (
+              <li key={tag.id}>
+                <StatusLabel>{tag.name}</StatusLabel>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-    </div>
-  );
-}
 
-/* The content-type badge is the one piece of this row the posts screen will keep across the
-   redesign, so it reads the shared table in src/components/admin/contentTypes.ts instead of
-   the per-file copy of six emoji strings this file used to carry. */
-function ContentTypeBadge({ displayStyle }: { displayStyle: string }): React.ReactElement {
-  const type = contentTypeFor(displayStyle);
-  const TypeIcon = type.icon;
-  return (
-    <span className="inline-flex items-center gap-1 text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
-      <TypeIcon aria-hidden="true" className="size-3.5" />
-      {type.label}
-    </span>
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-[var(--admin-space-1)]">
+        {post.published && (
+          <Link
+            aria-label={`View ${post.title} on the public site`}
+            className={adminButtonClass({
+              className: 'hidden min-[600px]:inline-flex',
+              size: 'icon-sm',
+              variant: 'ghost',
+            })}
+            href={publicPostPath(post.subsection.slug, post.slug)}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <ArrowSquareOutIcon aria-hidden="true" className="size-4" />
+          </Link>
+        )}
+        <AdminButton onClick={() => onEdit(post)} size="sm" variant="secondary">
+          Edit
+          <span className="sr-only"> {post.title}</span>
+        </AdminButton>
+        <AdminButton loading={busy} onClick={() => onTogglePublish(post)} size="sm" variant="ghost">
+          {post.published ? 'Unpublish' : 'Publish'}
+          <span className="sr-only"> {post.title}</span>
+        </AdminButton>
+        <AdminButton
+          aria-label={`Delete ${post.title}`}
+          onClick={() => onDelete(post)}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <TrashIcon aria-hidden="true" className="size-4" />
+        </AdminButton>
+      </div>
+    </li>
   );
 }

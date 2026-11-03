@@ -435,7 +435,64 @@ byte size.
 
 Still open for checkpoint 5: the **posts** screen (its rows, filters and editor belong to
 checkpoint 6), and the login/signup screens (§7). Once Posts is converted, checkpoint 5's evidence
-is the same two tables with the Posts row added.
+is the same two tables with the Posts row added. — *Posts is converted in §4.5; login/signup are
+still open.*
+
+### 4.5 Posts list on one endpoint (checkpoints 5 and 6, list half)
+
+The last legacy screen is converted. `PostsManager` no longer builds its list out of one request
+per subsection; it asks the single authenticated list endpoint built in §4.4 and renders what the
+server says, including the failure.
+
+| File | What it is now | What it replaced |
+| --- | --- | --- |
+| `src/components/admin/post/PostsManager.tsx` | `PageHeader` ("Posts" + one primary action) → `AdminFilterBar` with **search / status / subsection / order** (the subsection select grouped by `optgroup` per section) → server-paged rows → `Previous / 1 2 / Next` + "Page 1 of 2". One list request per filter change, the search box debounced 300 ms so typing is not one round trip per keystroke; a stale response can't overwrite a newer one (each request owns an `active` flag); `AdminLoadingState` / `AdminErrorState` (with retry) / `AdminEmptyState` (different copy for "no posts" and "nothing matches"); publish/unpublish and delete report success in a `Notice` and failure in an assertive `Notice` naming the post; page resets to 1 whenever a filter changes | the fan-out below, a client-side `useEffect` filter, `ContentLoader` forever on a failed read, an empty list standing in for a failed subsection, `+ New Post` painted by hand, and an `h1` that was white-on-white in light mode |
+| `src/components/admin/post/postListItem.tsx` | one row = title + `Live`/`Draft` `StatusLabel` + content-type badge, then "**section / subsection** · edited …" (the hierarchy the screen was missing), tag chips as `StatusLabel`s, and the actions `View on public site` (published only, `target=_blank`), `Edit`, `Publish`/`Unpublish`, `Delete` — each naming the post to assistive tech, each a token-driven `AdminButton` | three hand-painted buttons with unqualified labels, 11px tag chips, no section, no date, a `views` count, and a project link that appeared for every style |
+| `src/lib/postFilters.ts` | adds `isPostFilterActive()` (when "Clear filters" appears — sorting is excluded because it reorders, it does not narrow) and `buildPostListPageItems()` (first/last/current±1 with a `gap` marker) | — |
+| `src/components/admin/subsections/SubSectionFilter.tsx` | **deleted** — its single hand-styled select is replaced by the shared filter row | a select whose label implied it was the only possible filter |
+
+**The fan-out, and the measurement that proves it is gone.** The pre-change tree at
+`src/components/admin/post/PostsManager.tsx:55-67` did:
+
+```ts
+const allSubsections = res.sections.flatMap((s) => s.subsections || []);
+const postsPromises = allSubsections.map(sub => adminApi.getPosts(sub.slug).catch(() => ({ posts: [] })));
+```
+
+with no error path at all (the outer `catch` only logged). Nine seeded subsections meant nine
+requests, and a 500 on any of them looked like "this subsection has no posts". The code path is
+removed — the only remaining `getPosts(` text in `src/components/admin/**` is this quoted baseline
+line inside the comment above it, and `adminApi.getPosts` (`src/lib/api.ts:114`) now has no caller
+in the admin — and
+`tests/e2e/admin-post-list.spec.ts` › "issues one list request, not one per subsection" asserts the
+whole network log of `/admin/posts`: exactly **one** `/api/admin/posts` call, **zero** calls
+matching `/api/admin/subsections/:slug/posts`, and **3** admin requests in total (auth check, the
+sections call that fills the subsection select, the list).
+
+Verified on the built tree (`npm run build` exit 0, server on 3099):
+
+| Check | How | Result |
+| --- | --- | --- |
+| Fan-out replaced | request-count test above | PASS |
+| Filters are server-side | status=draft → 5 rows, every row `data-published="false"`; subsection=projects → rows all under *Projects*; search=Pattern → 1 row; each asserted against `/api/admin/posts` with the same query, not a hard-coded number | PASS |
+| Paging is stable | page 2 shows the remaining rows, `aria-current="page"` on the button, and no page-1 title reappears (the `id` tie-break in `buildPostListOrderBy`) | PASS |
+| Failed list | `route.fulfill` 500 → `role=alert` with the server's message + retry, and *not* the "No posts yet" empty state; retry restores 10 rows | PASS |
+| Publish round trip | draft → publish → notice → reload → still `Live` → unpublish → reload → `Draft`, with the seeded row restored in a `finally` | PASS |
+| Cancel changes nothing | delete dialog → Cancel → list total unchanged | PASS |
+| 375 px | no horizontal overflow, delete control ≥ 44 px, title truncates | PASS |
+| Unit coverage of the query rules | `tests/unit/admin-post-filters.test.ts` — 20 tests over parse/where/order/search-params/page-info/page-items/active-filters | PASS |
+| Hex / emoji census | `src/components/admin/**` 163 → **147 literals in 8 files**; `PostsManager.tsx` and `postListItem.tsx` are at **0**; no emoji in either new file | PASS |
+
+Evidence: `after-screens/cp6-posts-*` (12 PNGs: default, drafts filter, page 2 × 1440/375 ×
+dark/light, overflow=0 and row counts recorded in `capture-notes.txt`) and
+`after-screens/cp5-sections-*` / `cp5-tags-*` (8 PNGs re-captured into the same folder so that one
+set contains all six screens at both widths in both themes, which is the shape checkpoint 5 names).
+Logs: `/tmp/cora/evidence/admin-run-iter6-{build,build2,eslint,playwright,playwright-posts,shots,vitest}.log`.
+
+Still open for checkpoint 6 (the editor half): full-width writing area, persistent save/publish
+bar, explicit preview, unsaved-changes warning, project-only URL/image fields in a rebuilt editor,
+the compact title-only flow, and the per-display-style create→publish→delete browser lifecycle on a
+re-seeded database. `postForm.tsx` / `PostEditModal.tsx` (31 hex literals each) are that work.
 
 
 ### Colour

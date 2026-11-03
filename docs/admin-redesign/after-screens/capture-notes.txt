@@ -26,3 +26,23 @@ cp5-subsections-filtered-375-light.png  overflow=0 h1="Subsections" bytes=32220 
 cp5-subsections-form-375-light.png  overflow=0 h1="Subsections" bytes=120999  FormSection + AdminField + radio display-style group + EmojiPicker on tokens
 cp5-profile-375-light.png  overflow=0 h1="Profile" bytes=70213  Picture/Bio/Contact/Social/Resume groups + sticky save area
 cp5-profile-unsaved-375-light.png  overflow=0 h1="Profile" bytes=68255  sticky save bar reads "Unsaved changes"
+cp6-posts-1440-dark.png  overflow=0 rows=10 h1="Posts" bytes=113946  PageHeader + search/status/subsection/order filters + 10 rows + pagination
+cp6-posts-drafts-1440-dark.png  overflow=0 rows=5 h1="Posts" bytes=67331  status filter applied server-side: every row is a draft
+cp6-posts-page2-1440-dark.png  overflow=0 rows=7 h1="Posts" bytes=88376  page 2 of 2 with the remaining rows
+cp6-posts-375-dark.png  overflow=0 rows=10 h1="Posts" bytes=96994  PageHeader + search/status/subsection/order filters + 10 rows + pagination
+cp6-posts-drafts-375-dark.png  overflow=0 rows=5 h1="Posts" bytes=54339  status filter applied server-side: every row is a draft
+cp6-posts-page2-375-dark.png  overflow=0 rows=7 h1="Posts" bytes=75248  page 2 of 2 with the remaining rows
+cp6-posts-1440-light.png  overflow=0 rows=10 h1="Posts" bytes=115153  PageHeader + search/status/subsection/order filters + 10 rows + pagination
+cp6-posts-drafts-1440-light.png  overflow=0 rows=5 h1="Posts" bytes=68020  status filter applied server-side: every row is a draft
+cp6-posts-page2-1440-light.png  overflow=0 rows=7 h1="Posts" bytes=89149  page 2 of 2 with the remaining rows
+cp6-posts-375-light.png  overflow=0 rows=10 h1="Posts" bytes=97855  PageHeader + search/status/subsection/order filters + 10 rows + pagination
+cp6-posts-drafts-375-light.png  overflow=0 rows=5 h1="Posts" bytes=54976  status filter applied server-side: every row is a draft
+cp6-posts-page2-375-light.png  overflow=0 rows=7 h1="Posts" bytes=75531  page 2 of 2 with the remaining rows
+cp5-sections-1440-dark.png  overflow=0 h1="Sections" bytes=53967  PageHeader + one primary action + seeded rows on tokens
+cp5-tags-1440-dark.png  overflow=0 h1="Tags" bytes=29551  PageHeader + one primary action + seeded rows on tokens
+cp5-sections-375-dark.png  overflow=0 h1="Sections" bytes=37917  PageHeader + one primary action + seeded rows on tokens
+cp5-tags-375-dark.png  overflow=0 h1="Tags" bytes=17739  PageHeader + one primary action + seeded rows on tokens
+cp5-sections-1440-light.png  overflow=0 h1="Sections" bytes=54829  PageHeader + one primary action + seeded rows on tokens
+cp5-tags-1440-light.png  overflow=0 h1="Tags" bytes=30142  PageHeader + one primary action + seeded rows on tokens
+cp5-sections-375-light.png  overflow=0 h1="Sections" bytes=38355  PageHeader + one primary action + seeded rows on tokens
+cp5-tags-375-light.png  overflow=0 h1="Tags" bytes=18107  PageHeader + one primary action + seeded rows on tokens

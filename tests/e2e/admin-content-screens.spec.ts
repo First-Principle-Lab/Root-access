@@ -6,8 +6,8 @@ import { loginAsAdmin } from './helpers/adminAuth';
    action - and the numbers it shows come from the seeded database, not from a fixture. The expected
    counts are read from the same endpoints the screens call, so the assertions stay true after a
    re-seed instead of hard-coding 12/5/7.
-   /admin/posts is deliberately absent: that screen is rebuilt by checkpoint 6 and is still the
-   legacy list, which README 4.3 records as an open item. */
+   /admin/posts is here too now that checkpoint 6 rebuilt it onto the single list endpoint; its
+   deeper behaviour (fan-out gone, paging, publish round trip) is tests/e2e/admin-post-list.spec.ts. */
 
 const adminMain = (page: Page) => page.locator('main#admin-main');
 
@@ -25,6 +25,13 @@ async function seededStats(page: Page) {
     subsections: number;
     tags: number;
   };
+}
+
+/** The whole post set, straight from the list endpoint the screen itself calls. */
+async function seededPostCount(page: Page): Promise<number> {
+  const response = await page.request.get('/api/admin/posts?limit=1');
+  if (!response.ok()) throw new Error(`post list failed: ${response.status()}`);
+  return ((await response.json()) as { total: number }).total;
 }
 
 function rowFor(page: Page, label: string) {
@@ -120,6 +127,31 @@ test.describe('content screens - headings, primary actions and seeded data', () 
     await expect(page.getByText(`${stats.subsections} of ${stats.subsections} subsections`)).toBeVisible();
   });
 
+  test('posts screen opens with its title, its one primary action and seeded rows', async ({
+    page,
+  }) => {
+    await loginAsAdmin(page);
+    const total = await seededPostCount(page);
+
+    await page.goto('/admin/posts');
+    await expect(pageTitle(page, 'Posts')).toBeVisible();
+    await expect(adminMain(page).getByRole('button', { name: 'New post' })).toBeVisible();
+    await expect(adminMain(page).getByRole('search')).toBeVisible();
+    for (const label of ['Search', 'Status', 'Subsection', 'Order']) {
+      await expect(page.getByLabel(label)).toBeVisible();
+    }
+
+    // Rows come from the seeded database, and each one names its section, subsection and state.
+    await expect(adminMain(page).getByText(`${total} posts`)).toBeVisible();
+    const firstRow = adminMain(page).locator('[data-slot="post-row"]').first();
+    await expect(firstRow).toContainText('/');
+    await expect(firstRow.getByRole('button', { name: /^Edit / })).toBeVisible();
+
+    // The four stat cards and the green "Live" button are gone from the dashboard; the posts
+    // screen must not reintroduce a fake metric either, so the count shown is the endpoint total.
+    await expect(adminMain(page).getByText(`${total} posts`)).toHaveCount(1);
+  });
+
   test('tags screen opens with its title and its one primary action', async ({ page }) => {
     await loginAsAdmin(page);
     const stats = await seededStats(page);
@@ -185,6 +217,7 @@ test.describe('content screens at 375px', () => {
     ['/admin', 'Dashboard'],
     ['/admin/sections', 'Sections'],
     ['/admin/subsections', 'Subsections'],
+    ['/admin/posts', 'Posts'],
     ['/admin/tags', 'Tags'],
     ['/admin/profile', 'Profile'],
   ] as const) {
