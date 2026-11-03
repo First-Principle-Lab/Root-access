@@ -2,16 +2,21 @@ import { z } from 'zod';
 import type { Profile } from '@/src/types';
 
 /* Profile form logic (checkpoint 5 of docs/admin-redesign-plan.md, "Profile controls").
-   Two rules the baseline got wrong are encoded here.
+   The rules the baseline got wrong are encoded here.
    1. It posted every field verbatim, so a half-typed `x.com/me` reached `z.string().url()` in
       src/schema/profileSchema.ts and the whole save came back as one opaque "Invalid data" 400.
       The URL and e-mail shape is checked here, per field, before anything is sent.
    2. An empty optional field must go out as `null`, not as `''`: the API schema only accepts a URL
-      or null, so an empty string would fail the request. */
+      or null, so an empty string would fail the request.
+   3. `githubLink` (checkpoint 7) behaves like the other social links here, with one difference the
+      admin has to be told about: an empty value does not hide the public GitHub icon, it falls back
+      to DEFAULT_GITHUB_URL in src/lib/githubLink.ts, which is the address the icon carried before
+      the field existed. */
 
 export interface ProfileFormValues {
   bio: string;
   email: string;
+  githubLink: string;
   instagramLink: string;
   linkedinLink: string;
   profilePicture: string;
@@ -24,6 +29,7 @@ export type ProfileFieldKey = keyof ProfileFormValues;
 export const EMPTY_PROFILE_FORM: ProfileFormValues = {
   bio: '',
   email: '',
+  githubLink: '',
   instagramLink: '',
   linkedinLink: '',
   profilePicture: '',
@@ -37,6 +43,7 @@ export function profileFormFromProfile(profile: Profile): ProfileFormValues {
   return {
     bio: profile.bio ?? '',
     email: profile.email ?? '',
+    githubLink: profile.githubLink ?? '',
     instagramLink: profile.instagramLink ?? '',
     linkedinLink: profile.linkedinLink ?? '',
     profilePicture: profile.profilePicture ?? '',
@@ -59,6 +66,7 @@ export function validateProfileForm(values: ProfileFormValues): Partial<Record<P
   }
 
   const urlFields: [ProfileFieldKey, string][] = [
+    ['githubLink', 'GitHub link'],
     ['xLink', 'X link'],
     ['linkedinLink', 'LinkedIn link'],
     ['instagramLink', 'Instagram link'],
@@ -83,6 +91,7 @@ export function buildProfilePayload(values: ProfileFormValues) {
   return {
     bio: trimOrNull(values.bio),
     email: trimOrNull(values.email),
+    githubLink: trimOrNull(values.githubLink),
     instagramLink: trimOrNull(values.instagramLink),
     linkedinLink: trimOrNull(values.linkedinLink),
     profilePicture: trimOrNull(values.profilePicture),

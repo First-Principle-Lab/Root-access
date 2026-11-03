@@ -911,6 +911,7 @@ export const ProfileScalarFieldEnum = {
   resumeUrl: 'resumeUrl',
   instagramLink: 'instagramLink',
   linkedinLink: 'linkedinLink',
+  githubLink: 'githubLink',
   bio: 'bio',
   adminId: 'adminId',
   profilePicture: 'profilePicture'

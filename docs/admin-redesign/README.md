@@ -585,7 +585,96 @@ Still open after this section, for checkpoint 6: the two auth screens (`LoginPag
 `SignUpPage.tsx`) keep their legacy card, and `FullScreenLoader` keeps its own hexes; both are
 shell-surface work rather than editor work and are listed in §7.
 
+### 4.7 Editable `githubLink` on the profile (checkpoint 7)
 
+The GitHub icon used to carry its address in markup, in two places, so changing it meant a deploy.
+It is now a profile column with a migration, shared validation, an admin field inside the existing
+social-links group, and both public reads pointing at the row.
+
+| File | Role |
+| --- | --- |
+| `prisma/schema.prisma` | `Profile.githubLink String?` next to the other link columns |
+| `prisma/migrations/20261103120000_profile_github_link/migration.sql` | `ADD COLUMN` + `UPDATE … WHERE "githubLink" IS NULL` backfill of the address the icon used |
+| `src/lib/githubLink.ts` (new) | `DEFAULT_GITHUB_URL` + `resolveGithubUrl(profile)` — the one place the fallback address exists, used by both public components |
+| `src/schema/profileSchema.ts` | `githubLink: z.string().url().nullable().optional()` in `updateProfileSchema`, so the write is validated by the same shared schema as the rest of the profile |
+| `src/app/api/admin/profile/route.ts` | field added to the `select`, the `update` (absent means untouched, explicit `null` clears) and the `create` branch of the existing upsert — no second write path |
+| `src/app/api/public/layout/route.ts`, `src/components/public/Sidebar/SidebarServer.tsx`, `src/app/(site)/page.tsx` | `githubLink: true` in the three public profile reads, so the value actually reaches the components |
+| `src/components/public/SocialLinks.tsx` | the hard-coded `href` becomes `resolveGithubUrl(profile)`; `githubLink` joins `SocialProfile` |
+| `src/components/public/Sidebar.tsx` | the hard-coded `href` becomes `resolveGithubUrl(layoutData.admin.profile)` |
+| `src/types/index.ts`, `HomeContent.tsx`, `SidebarClient.tsx`, `Sidebar.tsx` | `githubLink` added to the four profile shapes the admin and public screens pass around |
+| `src/components/admin/profile/profileForm.ts` | field in the form values, `null` for empty, `GitHub link` in the per-field URL rule list |
+| `src/components/admin/profile/profileManager.tsx` | GitHub input at the head of the **Social links** group, and `noValidate` on the form (see below) |
+
+**Two defaults on purpose.** The migration backfills `https://github.com/parththirwani` into every
+existing row, and `resolveGithubUrl` returns the same address when the column is null. Neither is
+redundant: the backfill is what makes the already-published link survive the release for rows that
+exist today, and the fallback is what keeps the icon alive for a row that was never edited — the
+seed script still `INSERT`s a profile without the column, and an admin who clears the field lands
+there too. `DEFAULT_GITHUB_URL` is the only remaining copy of the address anywhere in `src/`:
+
+```
+$ grep -rn "github.com/parththirwani" src/
+src/lib/githubLink.ts:5:export const DEFAULT_GITHUB_URL = 'https://github.com/parththirwani';
+```
+
+**Why the profile form is `noValidate`.** The social inputs are `type="url"`, so Chromium's native
+constraint bubble answered before `handleSubmit` did: a half-typed GitHub address produced a browser
+tooltip on one field and an inline `AdminField` message on the others. With `noValidate` the form's
+own per-field rule is the only voice, which is what the plan asks for ("validation errors associated
+with fields") and what the rest of the admin already does.
+
+**Public read paths that were *not* touched.** `/api/public/profile` selects five profile columns and
+its only consumer, `publicApi.getProfile` in `src/lib/api.ts:48`, is not imported by any component, so
+adding the field there would be an unrelated change. `src/app/globals.css`, `src/middleware.ts` and
+`src/lib/auth.ts` are byte-identical to the baseline.
+
+Migration verification (`/tmp/cora/evidence/admin-run-iter8/cp8-migration.log`, produced by the
+committed-to-nothing but re-runnable `/tmp/cora/cp7-migration-evidence.sh`; it only ever creates and
+drops its own `admin-run-cp7-*` scratch databases):
+
+| Case | Result |
+| --- | --- |
+| `pg_dump` snapshot of `rootaccess_admin_dev`, rewound (column dropped, history row deleted), then `npx prisma migrate deploy` | applies exactly `20261103120000_profile_github_link`; the seeded `seed_profile_1` row survives with `email`, `xLink`, `resumeUrl` intact and `githubLink = https://github.com/parththirwani` |
+| `migrate status` on that copy | "15 migrations found… Database schema is up to date!" |
+| `migrate diff --from-config-datasource --to-schema prisma/schema.prisma` on that copy | `-- This is an empty migration.` (no drift between the migration chain and the model) |
+| `npx prisma migrate deploy` on an **empty** database | full 15-migration chain applies; `migrate status` clean; the column is nullable `text` |
+| `/tmp/cora/seed.sql` loaded into the migrated schema | loads unchanged (17 posts, 1 profile) — the column is optional for old fixtures |
+| `npx prisma migrate deploy` + `migrate status` on `rootaccess_admin_dev` | applied, clean |
+| Rollback | `ALTER TABLE "Profile" DROP COLUMN "githubLink";` plus deleting the migration folder. No public read breaks on rollback because `resolveGithubUrl` supplies the same address the backfill wrote |
+
+Checkpoint evidence:
+
+| Requirement | Proof |
+| --- | --- |
+| migration + safe backfill | log above; `existing profile row survived…` query output |
+| zod validation in `src/schema/` | `src/schema/profileSchema.ts`; `tests/integration/admin-profile-github.test.ts` rejects `github.com/parththirwani`, `not a url`, `''` and `https://` with 400 + a `githubLink` entry in `errors`, and stores nothing |
+| API test accepts a valid URL | same file: `PATCH` → 200, `GET /api/admin/profile` → the value |
+| auth required | same file: anonymous `PATCH` → 401 and the column is unchanged |
+| public read returns it | same file: `GET /api/public/layout` → the stored value, then `null` after an explicit clear |
+| admin field grouped with bio/image/contact/social/resume | `tests/e2e/github-link.spec.ts` asserts the input is inside the `Social links` `FormSection` and prefilled; `after-github-link/cp7-profile-social-group-1440-{dark,light}.png` |
+| icon resolves to the author address when unset | `after-github-link/cp7-public-home-socials-*.png` record `href="https://github.com/parththirwani"` from the live page, sidebar and body alike; `tests/unit/public-github-link.test.ts` renders the real `SocialLinks` with `renderToStaticMarkup` for `{}`, `{githubLink: null}` and whitespace |
+| icon resolves to the edited value when set | `tests/e2e/github-link.spec.ts` edits through the form, reloads, re-reads the field and the uncached `/api/public/layout`; `tests/unit/public-github-link.test.ts` asserts the rendered anchor follows an edited value and *stops* containing the old one |
+| existing profile rows survive | integration `afterAll` restores the row; the last test asserts the same `id` plus `email`, `xLink`, `linkedinLink`, `instagramLink`; `psql` after the full suite shows the seeded bytes unchanged |
+
+**Not proven here, stated plainly.** The browser spec asserts the *unedited* address on the public
+page. The public routes revalidate on a 60-second window (`export const revalidate = 60` in
+`src/app/(site)/layout.tsx` and `src/app/(site)/page.tsx`, `unstable_cache(…, { revalidate: 60 })` in
+`SidebarServer.tsx`), so a DOM assertion about a value the suite just changed would depend on that
+timer; the edited value is therefore asserted on the uncached public read the components consume, and
+rendered through `SocialLinks` in a unit test. Also `src/components/public/Sidebar.tsx` (the client
+`PublicSidebar`) is dead code — `HomePage`/`PostPage`/`SubSectionPage`, its only importers, are not
+imported by any route — so its replacement is verified by the shared resolver plus the `/api/public/layout`
+contract it reads, not by a screenshot.
+
+Verification on the built tree: `npm run build` exit 0, `npx tsc --noEmit` exit 0,
+`npx vitest run` **118/118** (13 files, +19 over checkpoint 6), `npx playwright test` **62/62** (+6),
+`npx eslint .` **34 errors / 20 warnings** against the 48/24 baseline with zero new problems on any
+touched file (`src/components/admin/profile/profileManager.tsx` actually drops 2 errors / 2 warnings
+to 0/0; the two `any` errors in `src/app/api/admin/profile/route.ts` and the three in
+`src/components/public/Sidebar.tsx` are the baseline's own, same rules, shifted lines). Hard-coded
+colour in `src/components/admin/**` + `src/app/admin/**` is unchanged at 29 matching lines / 39
+literals in 5 files, none in `profileForm.ts` or `profileManager.tsx`. `after-github-link/` holds the
+12 screenshots with `capture-notes.txt`; logs in `/tmp/cora/evidence/admin-run-iter8/`.
 
 ### Colour
 
@@ -759,9 +848,9 @@ these PNGs.
   tested.
 - The pre-change screenshots are intentionally dark-only evidence: the identical light
   files are the measurement that the admin ignores the theme.
-- Public CSS, public routes, auth and the API surface were not modified in this phase;
-  the only intended public edits in later phases are the named `githubLink` reads in
-  `src/components/public/SocialLinks.tsx` / `Sidebar.tsx`.
+- Public CSS, public routes and auth were not modified in this phase. The named `githubLink`
+  integration (§4.7) is the only public diff: one added line in each of the three profile reads and
+  one changed `href` in each of `src/components/public/SocialLinks.tsx` and `Sidebar.tsx`.
 - Still open inside the shell checkpoint, deliberately deferred: `/admin/login` and
   `/admin/signup` keep their legacy card (no `.admin-shell`, so they remain theme-dead)
   and are converted in the auth-screen pass, and the shell offers "Log out" in both the

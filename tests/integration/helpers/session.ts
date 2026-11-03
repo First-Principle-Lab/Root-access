@@ -40,3 +40,32 @@ export async function authedRequest(pathWithQuery: string): Promise<NextRequest>
 export function anonymousRequest(pathWithQuery: string): NextRequest {
   return new NextRequest(`http://localhost${pathWithQuery}`, { method: 'GET' });
 }
+
+/** An authenticated write (`PATCH`/`POST`/`PUT`/`DELETE`) with a JSON body. */
+export async function authedJsonRequest(
+  pathWithQuery: string,
+  method: 'DELETE' | 'PATCH' | 'POST' | 'PUT',
+  body?: unknown,
+): Promise<NextRequest> {
+  return new NextRequest(`http://localhost${pathWithQuery}`, {
+    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: {
+      'content-type': 'application/json',
+      cookie: await adminCookieHeader(),
+    },
+    method,
+  });
+}
+
+/** The same write with no session, for the auth-required assertions on a mutation. */
+export function anonymousJsonRequest(
+  pathWithQuery: string,
+  method: 'DELETE' | 'PATCH' | 'POST' | 'PUT',
+  body?: unknown,
+): NextRequest {
+  return new NextRequest(`http://localhost${pathWithQuery}`, {
+    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method,
+  });
+}

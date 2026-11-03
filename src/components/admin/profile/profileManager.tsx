@@ -26,9 +26,16 @@ import {
    was swallowed by the promise it was thrown in - the button went back to "Change Picture" and
    nothing said the upload failed. Fields are grouped now (image, bio, contact, social, resume),
    each with its own error, and the save area stays reachable at the bottom of the form.
-   `githubLink` joins the social group in checkpoint 7; it is not invented here. */
+   GitHub sits in the same group (checkpoint 7); the only field whose public icon survives an empty
+   value, because the icon predates the column - see DEFAULT_GITHUB_URL in src/lib/githubLink.ts. */
 
 const SOCIAL_FIELDS: { hint: string; id: ProfileFieldKey; label: string; placeholder: string }[] = [
+  {
+    hint: 'Leave empty to keep the default address the public icon already points at.',
+    id: 'githubLink',
+    label: 'GitHub',
+    placeholder: 'https://github.com/username',
+  },
   {
     hint: 'Leave empty to hide the icon on the public site.',
     id: 'xLink',
@@ -185,7 +192,14 @@ export function ProfileManager() {
         title="Profile"
       />
 
-      <form className="flex flex-col gap-[var(--admin-space-5)]" onSubmit={handleSubmit}>
+      <form
+        className="flex flex-col gap-[var(--admin-space-5)]"
+        /* The browser's own `type="url"` constraint bubble would answer before this form does, so a
+           half-typed link would produce a native tooltip on one field and an inline message on the
+           others. Every admin form reports through AdminField instead. */
+        noValidate
+        onSubmit={handleSubmit}
+      >
         {(formError || savedNotice) && (
           <div className="flex flex-col gap-[var(--admin-space-2)]">
             {formError && (

@@ -29,6 +29,7 @@ async function getHomeData() {
               xLink: true,
               instagramLink: true,
               linkedinLink: true,
+              githubLink: true,
               email: true,
               resumeUrl: true,
               profilePicture: true,

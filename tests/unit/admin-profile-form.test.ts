@@ -6,6 +6,7 @@ import {
   profileFormFromProfile,
   validateProfileForm,
 } from '../../src/components/admin/profile/profileForm';
+import { DEFAULT_GITHUB_URL } from '@/src/lib/githubLink';
 import type { Profile } from '@/src/types';
 
 /* The baseline posted the form verbatim: a half-typed `x.com/me` reached
@@ -16,6 +17,7 @@ import type { Profile } from '@/src/types';
 const profile = (over: Partial<Profile> = {}): Profile => ({
   bio: null,
   email: null,
+  githubLink: null,
   id: 'profile_1',
   instagramLink: null,
   linkedinLink: null,
@@ -56,6 +58,7 @@ describe('validateProfileForm', () => {
         ...EMPTY_PROFILE_FORM,
         bio: 'Building CodeMate.',
         email: 'hello@test.local',
+        githubLink: 'https://github.com/parththirwani',
         instagramLink: 'https://instagram.com/parththirwani',
         linkedinLink: 'https://linkedin.com/in/parththirwani',
         profilePicture: 'https://cdn.example.com/me.png',
@@ -80,6 +83,12 @@ describe('validateProfileForm', () => {
     expect(validateProfileForm({ ...EMPTY_PROFILE_FORM, email: '   ' })).toEqual({});
   });
 
+  it('names the GitHub field when its link is half-typed, like the other social links', () => {
+    const errors = validateProfileForm({ ...EMPTY_PROFILE_FORM, githubLink: 'github.com/me' });
+    expect(Object.keys(errors)).toEqual(['githubLink']);
+    expect(errors.githubLink).toContain('https://');
+  });
+
   it('does not police the picture field, which can be a stored upload URL', () => {
     expect(
       validateProfileForm({ ...EMPTY_PROFILE_FORM, profilePicture: 'https://cdn.example.com/a.png' }),
@@ -99,6 +108,12 @@ describe('buildProfilePayload', () => {
     const payload = buildProfilePayload({ ...EMPTY_PROFILE_FORM, xLink: '  https://x.com/me  ' });
     expect(payload.xLink).toBe('https://x.com/me');
   });
+
+  it('sends an emptied GitHub field as null so the read path falls back, not as an empty string', () => {
+    const filled = profileFormFromProfile(profile({ githubLink: 'https://github.com/someone' }));
+    expect(buildProfilePayload(filled).githubLink).toBe('https://github.com/someone');
+    expect(buildProfilePayload({ ...filled, githubLink: '' }).githubLink).toBeNull();
+  });
 });
 
 describe('isProfileDirty', () => {
@@ -111,5 +126,11 @@ describe('isProfileDirty', () => {
     const loaded = profileFormFromProfile(profile({ bio: 'Stored bio.' }));
     expect(isProfileDirty({ ...loaded, bio: '' }, loaded)).toBe(true);
     expect(isProfileDirty({ ...loaded, email: 'a@b.co' }, loaded)).toBe(true);
+  });
+
+  it('treats editing or clearing the GitHub link as a change', () => {
+    const loaded = profileFormFromProfile(profile({ githubLink: DEFAULT_GITHUB_URL }));
+    expect(isProfileDirty({ ...loaded, githubLink: 'https://github.com/someone' }, loaded)).toBe(true);
+    expect(isProfileDirty({ ...loaded, githubLink: '' }, loaded)).toBe(true);
   });
 });
