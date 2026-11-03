@@ -220,6 +220,57 @@ what holds the accessibility row up while unconverted pages still strip their ow
 A component that later needs a different ring must declare it in `admin.css`, not with a
 utility.
 
+### 4.2 Shared shell delivered (checkpoint 3)
+
+The shell described in §5 is implemented and is now the only chrome around the six
+authenticated routes. Files:
+
+| File | Role |
+| --- | --- |
+| `src/components/admin/shell/adminRoutes.ts` | route table (`/admin` + 5 sections, 2 auth screens) and the two predicates that decide current-location and shell-vs-no-shell |
+| `src/components/admin/shell/adminNav.tsx` | maps those routes onto Phosphor icons (`SquaresFourIcon`, `FolderIcon`, `FolderOpenIcon`, `ArticleIcon`, `TagIcon`, `UserIcon`) replacing the 📊 📁 📂 📝 🏷️ 👤 nav emoji |
+| `src/components/admin/shell/AdminSidebar.tsx` | 240px panel: brand, `aria-current="page"` nav, "View site" (ordinary external link, `target="_blank" rel="noopener noreferrer"`), "Log out" |
+| `src/components/admin/shell/AdminTopBar.tsx` | 64px bar: current location as the visible heading, 44px hamburger with `aria-expanded` + `aria-controls`, `ThemeToggleButton` from `src/components/spaceui/theme-toggle.tsx`, "Log out" |
+| `src/hooks/useFocusTrap.ts` | Escape + Tab containment + focus restore, shared with the checkpoint-4 dialog |
+| `src/components/admin/adminLayout.tsx` | composition, auth redirect (unchanged `adminApi.logout()` + `checkAuth()` path), drawer/scrim state, skip link |
+| `src/app/admin/admin.css` | unchanged in this step; the shell consumes its tokens |
+
+Everything is token-driven (`bg-[color:var(--admin-surface)]`, `text-[length:var(--admin-text-meta)]`,
+`h-[var(--admin-header-h)]`, …): `grep -E '#[0-9a-fA-F]{3,8}' ` over `adminLayout.tsx` +
+`shell/` returns 0 hits and the admin-wide census stays at 294 literals / 17 files
+(unchanged from §4.1), with the nav emoji gone from the shell.
+
+Verification (`npx playwright test tests/e2e/admin-shell.spec.ts`, 17/17 pass on the
+built tree, output in `/tmp/cora/evidence/admin-run-iter3/cp3-playwright-final.log`):
+
+| Check | Result |
+| --- | --- |
+| Exactly one `a[aria-current="page"]` per shell route, and the top bar heading names the same section, on all 6 routes | pass |
+| Live-site link, theme control, logout, `<main>` and skip link present on every route | pass |
+| Theme: dark default → toggle → `localStorage.site-theme = light` → survives reload → survives admin→public (popup) → survives public→admin | pass |
+| No wrong-theme flash: `<html>` class never contains `dark` during a light-prefixed load, and next-themes' blocking script precedes the first rendered body element | pass |
+| Theme switch still lands on the right value with motion allowed (`reducedMotion: no-preference`) | pass |
+| Mobile 375×844: keyboard opens the drawer (`Enter` on the hamburger), `aria-expanded` flips, `role="dialog"` + `aria-modal` + accessible name appear, focus moves inside, Tab cycles inside, Escape closes and restores focus to the trigger, Space re-opens | pass |
+| Drawer closes on navigation and on scrim click, and the reopened drawer marks the new current location | pass |
+| Hamburger and drawer hidden at ≥850px, sidebar 240px visible; 44px touch target on the hamburger | pass |
+| Zero horizontal overflow at 1440 / 768 / 375 on `/admin/posts` | pass |
+| `npx vitest run tests/unit/admin-shell-routes.test.ts` — 6 unit tests on the route predicates (prefix traps such as `/admin/subsections` vs `/admin/sections`) | pass |
+
+After-shell screenshots (viewport-sized, re-seeded DB, `overflow=0` recorded per file in
+`cp3-shots.log`): `docs/admin-redesign/after-shell/cp3-<screen>-{1440,375}-{dark,light}.png`
+for all six screens plus `cp3-drawer-open-375-{dark,light}.png`.
+
+Two traps found by measurement while building it. (1) The drawer originally spanned
+`inset-y-0`, i.e. it covered the top bar; at 375px that made the hamburger
+(the only close control) unreachable by pointer — Playwright reported
+"subtree intercepts pointer events" while every `aria-expanded` assertion still passed.
+Stacking is now top bar `z-50` > drawer `z-40` > scrim `z-30` > sidebar `z-20`, and the
+drawer starts below the 64px bar. (2) Chromium 1248 drops a single
+`focus()` on the freshly revealed panel when a mouse click re-focuses its trigger
+afterwards (no `focusin` at all under the suite's `prefers-reduced-motion: reduce`),
+so `useFocusTrap` re-asserts the panel's first focusable for ~640ms instead of focusing
+once; the keyboard path alone hid this because keyboard activation does not re-focus.
+
 ### Colour
 
 | Token | Dark | Light | Use |
@@ -390,3 +441,9 @@ these PNGs.
 - Public CSS, public routes, auth and the API surface were not modified in this phase;
   the only intended public edits in later phases are the named `githubLink` reads in
   `src/components/public/SocialLinks.tsx` / `Sidebar.tsx`.
+- Still open inside the shell checkpoint, deliberately deferred: `/admin/login` and
+  `/admin/signup` keep their legacy card (no `.admin-shell`, so they remain theme-dead)
+  and are converted in the auth-screen pass, and the shell offers "Log out" in both the
+  top bar and the sidebar/drawer, which the checkpoint-4 button primitive will
+  de-duplicate. `FullScreenLoader` still paints outside the shell with its own dark
+  hexes until the checkpoint-4 loading state lands.
