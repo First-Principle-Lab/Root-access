@@ -854,6 +854,110 @@ server-safe rendering), always with an accessible name when icon-only and `aria-
 when paired with a text label. The EmojiPicker stays — it edits subsection data, not
 chrome.
 
+### 4.9 Project fit and principles (checkpoint 9)
+
+Every claim below is read off the final diff: `git diff 3b4d897 HEAD`, where `3b4d897` is the commit
+this branch started from (`origin/dev` + the test-tooling commit), so nothing cited is an artefact of
+an intermediate state. Each precedent is a file that already existed at `3b4d897`.
+
+#### Sibling precedents the diff mirrors
+
+| # | Principle | Sibling precedent (pre-existing) | Where the diff follows it |
+| --- | --- | --- | --- |
+| 1 | App Router `route.ts` exporting verbs wrapped in `withAuth` | `src/app/api/admin/tags/route.ts:91-92`, `src/app/api/admin/sections/route.ts:77-78` | new `src/app/api/admin/posts/route.ts:81`; `stats/route.ts:47` and `profile/route.ts:99-100` keep the same shape |
+| 2 | One auth path: cookie → `withAuth` → `getServerSession` | `src/lib/authWrapper.ts:9` → `src/lib/auth.ts:6`; client guard `useAuth()` at `src/components/admin/adminLayout.tsx:20` | the new endpoint uses `withAuth` and nothing else; the shell keeps `useAuth()`/`adminApi.logout()` (`adminLayout.tsx:56-57`). `grep -rn "jwt.verify" src` matches only `src/lib/auth.ts:14` |
+| 3 | Prisma only through the singleton | `src/lib/prisma.ts:28`, imported by `src/app/api/admin/tags/route.ts:1` | `src/app/api/admin/posts/route.ts:1`, `stats/route.ts:1`. `grep -rn "new PrismaClient" src` matches nothing |
+| 4 | `src/app/admin/*` pages stay thin wrappers around `src/components/admin/*` | `src/app/admin/tags/page.tsx:1-10`, `src/app/admin/posts/page.tsx:1-9` | `src/app/admin/posts/new/page.tsx` (10 lines) and `src/app/admin/posts/edit/[subsectionSlug]/[postSlug]/page.tsx` (15 lines, awaiting the Next 16 `params` Promise); no data access, no `'use client'` |
+| 5 | Validation through shared zod schemas in `src/schema/*` | `src/schema/tagSchema.ts:3` consumed at `src/app/api/admin/tags/route.ts:16` | `postListQuerySchema` (`src/schema/postsSchema.ts:76`) parsed at `src/lib/postFilters.ts:30`; `postDraftSchema` consumed by `src/lib/postEditor.ts`; profile field shapes now exported from `src/schema/profileSchema.ts:6-7` |
+| 6 | All client HTTP through `src/lib/api.ts` | `fetcher` at `src/lib/api.ts:7`, `adminApi` object at `:57` | `listPosts` added inside the same object (`src/lib/api.ts:120-121`); the editor reuses `getPost`/`updatePost`/`uploadImage`. `grep -rn "fetch(" src/components/admin src/components/ui src/hooks` returns only the two baseline calls in `src/components/admin/auth/SignUpPage.tsx:23,49` |
+| 7 | Theme exclusively through the existing `next-themes` provider and toggle | `src/app/layout.tsx:45`, `src/components/spaceui/theme-toggle.tsx:439`, public consumer `src/components/public/Sidebar/SidebarClient.tsx:9,61` | `src/components/admin/shell/AdminTopBar.tsx:4,42` renders that `ThemeToggleButton`; `admin.css` themes off the `html.dark` class the provider writes. `grep -rn "localStorage\|useTheme\|documentElement.classList" src/components/admin src/app/admin src/hooks` matches nothing |
+| 8 | New primitives in `src/components/ui/` on the `components.json` + `cn()` + `class-variance-authority` pattern | `src/components/ui/button.tsx:7,10`; aliases declared at `components.json:17-20` | `admin-button.tsx:14`, `notice.tsx:13`, `status-label.tsx:10` use `cva` + `cn`; all nine new primitives import `cn` from `@/src/lib/cn`; `src/hooks/useFocusTrap.ts` lands in the `@/src/hooks` alias path, a directory that did not exist at `3b4d897` |
+| 9 | Phosphor icons, accessible when icon-only | `src/components/public/SocialLinks.tsx:1` (`@phosphor-icons/react/ssr`) | `src/components/admin/contentTypes.ts:1-2`, `shell/adminNav.tsx:8-9`, `ui/admin-button.tsx:6`, `ui/admin-state.tsx:3-4`; the leftover emoji glyph and hand-drawn inline `<svg>` in `post/postCard.tsx:1` became named Phosphor icons |
+| 10 | File naming and casing per directory | `src/components/admin/subsections/SubSection.tsx`, `auth/LoginPage.tsx` (components); `src/components/ui/spaceui-spinner.tsx` (primitives) | components are PascalCase (`shell/AdminSidebar.tsx`, `shell/AdminTopBar.tsx`), pure logic modules camelCase (`shell/adminRoutes.ts`, `subsections/subsectionFilters.ts`, `dashboard/overviewRows.ts`), `ui/` primitives kebab-case (`admin-button.tsx`, `confirm-dialog.tsx`), route folders resource-shaped (`src/app/api/admin/posts/`) |
+| 11 | Import style inside the admin tree | relative parent import at `src/components/admin/auth/LoginPage.tsx:8` | `src/components/admin/shell/AdminTopBar.tsx:4` (`../../spaceui/theme-toggle`); cross-package imports use the `@/src/...` alias as elsewhere |
+| 12 | `docs/<topic>/README.md` + PNGs in the same folder | `docs/design-review/README.md:1` and its 17 PNGs | this file plus `before/`, `mockups/`, `after-shell/`, `after-controls/`, `after-screens/`, `after-editor/`, `after-github-link/` |
+| 13 | Public routes and route groups untouched by admin work | `src/app/(site)/page.tsx` selecting its profile columns | one added select line (`githubLink: true`); the only public edits are the `githubLink` integration points listed below |
+
+#### What this audit found, and the one fix it made
+
+The audit's single real deviation: `src/components/admin/profile/profileForm.ts` was the last file
+under `src/components/admin/**` that imported `zod` directly, re-deriving `z.url()` / `z.email()`
+beside the rules the API already owned. Those two shapes are now named exports of the shared schema
+(`src/schema/profileSchema.ts:6-7`), used by `updateProfileSchema` there (lines 11-17) and by the
+form's per-field pre-check (`profileForm.ts:56,64`), so client and server cannot drift. Proof:
+`grep -rn "from \"zod\"" src --include=*.ts --include=*.tsx` now matches only files in `src/schema/`.
+Behaviour is unchanged: the same inputs are accepted and rejected (118/118 unit + integration tests,
+71/71 browser tests, below).
+
+Deliberate non-changes, recorded rather than silently kept: the files
+`src/components/admin/post/{postList,postCard,blogPost,titleOnlyItem,filterBar}.tsx` were already
+unreferenced at `3b4d897` (`postList` was never imported by `PostsManager`; it imported `postCard`,
+`blogPost` and `titleOnlyItem`). Deleting them is outside this plan, so they stay; `postCard.tsx` was
+edited only because checkpoint 4's emoji sweep greps every file in `src/components/admin/**`.
+
+#### ESLint per touched file, against the recorded baseline
+
+Baseline is `/tmp/cora/baseline/eslint-newbase.json` (the untouched tree). Every file in
+`git diff --name-only 3b4d897 HEAD -- src` (56 entries: 28 added, 25 modified, 3 deleted) was compared
+per file. **No touched file gained a problem.** 46 of the 53 that still exist report zero; the seven
+that still report something report exactly their baseline counts:
+
+| File | Baseline | Now |
+| --- | --- | --- |
+| `src/lib/api.ts` | 10e/0w | 10e/0w (all pre-existing `no-explicit-any` in untouched members) |
+| `src/components/public/Sidebar.tsx` | 1e/2w | 1e/2w |
+| `src/app/api/admin/profile/route.ts` | 2e/0w | 2e/0w |
+| `src/components/public/Sidebar/SidebarServer.tsx` | 1e/0w | 1e/0w |
+| `src/app/api/admin/stats/route.ts` | 0e/1w | 0e/1w |
+| `src/app/api/public/layout/route.ts` | 0e/1w | 0e/1w |
+| `src/components/admin/post/postCard.tsx` | 0e/1w | 0e/1w |
+| `src/components/admin/post/PostsManager.tsx` | 4e/0w | **0e/0w** |
+| `src/components/admin/profile/profileManager.tsx` | 2e/2w | **0e/0w** |
+| `src/components/admin/post/MarkDownEditor.tsx` | 2e/0w | **0e/0w** |
+| `src/components/admin/section/sectionManager.tsx` | 2e/0w | **0e/0w** |
+| `src/components/admin/subsections/SubSection.tsx` | 2e/0w | **0e/0w** |
+| `src/components/admin/tags/tagsManager.tsx` | 2e/0w | **0e/0w** |
+| `src/components/admin/post/PostEditModal.tsx` (deleted) | 0e/1w | removed |
+| `src/components/admin/post/postForm.tsx` (deleted) | 0e/1w | removed |
+
+Repo-wide: **34 errors / 20 warnings**, against the untouched baseline of 48 / 24 — i.e. 14 fewer
+errors and 4 fewer warnings, with no file worse than it was. The remaining errors are pre-existing and
+unrelated to this work (`src/lib/api.ts` 10, `src/lib/serialize.ts` 4, `src/lib/authWrapper.ts` 3,
+`src/components/public/SubSectionPage.tsx` 2+1, the unconverted auth screens 2+1, and one-offs in
+public/dead files); they are reported here separately, as the plan's acceptance table requires, and
+not silently "fixed".
+
+#### Run record for this checkpoint (one tree, one server)
+
+| Command | Result | Log in `/tmp/cora/evidence/` |
+| --- | --- | --- |
+| `npm run build` | exit 0 | `admin-run-iter10-build.log` |
+| `npx tsc --noEmit` | exit 0 | `admin-run-iter10-tsc.log` |
+| `npx vitest run` | exit 0, 118/118 across 13 files | `admin-run-iter10-vitest.log` |
+| `npx playwright test` | exit 0, 71/71 in 53.9s | `admin-run-iter10-playwright.log` |
+| `npx eslint .` | 34e/20w (baseline 48/24) | `admin-run-iter10-eslint-current.{json,txt}` |
+| `npx eslint src/schema/profileSchema.ts src/components/admin/profile/profileForm.ts` | exit 0, 0 problems | `admin-run-iter10-eslint-zodfix.json` |
+| `PGPASSWORD=rootaccess psql … -f /tmp/cora/seed.sql` after the suite | exit 0, data back at seed values | `admin-run-iter10-reseed-{before,after}.log` |
+
+#### Public-surface diff proof
+
+`git diff --stat 3b4d897 HEAD -- src/app/globals.css src/middleware.ts src/lib/auth.ts src/lib/authWrapper.ts src/lib/prisma.ts` is **empty**.
+The whole public diff is the named `githubLink` integration — 6 files, 10 insertions, 2 deletions:
+
+```
+src/app/(site)/page.tsx                         | 1 +
+src/components/public/HomeContent.tsx           | 1 +
+src/components/public/Sidebar.tsx               | 4 +++-
+src/components/public/Sidebar/SidebarClient.tsx | 1 +
+src/components/public/Sidebar/SidebarServer.tsx | 1 +
+src/components/public/SocialLinks.tsx           | 4 +++-
+```
+
+Four of those add a `githubLink` field to a profile shape or select list; the only two behavioural
+edits are the hard-coded hrefs replaced by `resolveGithubUrl` at
+`src/components/public/SocialLinks.tsx:18` and `src/components/public/Sidebar.tsx:244`. No public CSS
+changed, no public route changed, and no `.site-shell` selector changed.
+
 ## 5. Where admin density needs more width and stronger action hierarchy
 
 - **Width.** The public 656px column is right for reading and wrong for editing: a post

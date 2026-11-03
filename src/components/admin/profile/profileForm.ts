@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { profileEmailSchema, profileUrlSchema } from '@/src/schema/profileSchema';
 import type { Profile } from '@/src/types';
 
 /* Profile form logic (checkpoint 5 of docs/admin-redesign-plan.md, "Profile controls").
@@ -53,7 +53,7 @@ export function profileFormFromProfile(profile: Profile): ProfileFormValues {
 }
 
 function isUrl(value: string): boolean {
-  return z.url().safeParse(value).success;
+  return profileUrlSchema.safeParse(value).success;
 }
 
 /** Field-level messages, keyed by field, in a fixed order so the first one is deterministic. */
@@ -61,7 +61,7 @@ export function validateProfileForm(values: ProfileFormValues): Partial<Record<P
   const errors: Partial<Record<ProfileFieldKey, string>> = {};
 
   const email = values.email.trim();
-  if (email && !z.email().safeParse(email).success) {
+  if (email && !profileEmailSchema.safeParse(email).success) {
     errors.email = 'Enter a full email address, like you@example.com.';
   }
 
