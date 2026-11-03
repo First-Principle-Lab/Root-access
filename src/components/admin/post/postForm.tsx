@@ -1,6 +1,9 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { XIcon } from '@phosphor-icons/react';
+import { ContentTypeBadge } from '@/src/components/admin/contentTypeBadge';
+import { contentTypeFor } from '@/src/components/admin/contentTypes';
 import { MarkdownEditor } from '../post/MarkDownEditor';
 
 interface PostFormData {
@@ -49,20 +52,6 @@ export function PostForm({
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverUploadError, setCoverUploadError] = useState('');
   const coverInputRef = useRef<HTMLInputElement>(null);
-
-  const getDisplayStyleInfo = (style: string) => {
-    const info: Record<string, { emoji: string; label: string; desc: string }> = {
-      blog:       { emoji: '📝', label: 'Blog Post',  desc: 'Full article with content' },
-      project:    { emoji: '🚀', label: 'Project',    desc: 'Card with external link'   },
-      title_only: { emoji: '📌', label: 'Title Only', desc: 'Simple title list'         },
-      BLOG:       { emoji: '📝', label: 'Blog Post',  desc: 'Full article with content' },
-      PROJECT:    { emoji: '🚀', label: 'Project',    desc: 'Card with external link'   },
-      TITLE_ONLY: { emoji: '📌', label: 'Title Only', desc: 'Simple title list'         },
-    };
-    return info[style] || info['blog'];
-  };
-
-  const styleInfo = getDisplayStyleInfo(displayStyle);
 
   // Reuse the same /api/admin/upload endpoint your profile picture uses.
   // It sends base64 → Cloudinary → returns { url, publicId }
@@ -124,27 +113,20 @@ export function PostForm({
           className="w-full px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition"
         >
           <option value="">Select a subsection</option>
-          {subsections.map((sub) => {
-            const s = getDisplayStyleInfo(sub.displayStyle);
-            return (
-              <option key={sub.id} value={sub.slug}>
-                {sub.icon} {sub.name} ({s.emoji} {s.label})
-              </option>
-            );
-          })}
+          {subsections.map((sub) => (
+            /* An <option> can only hold text, so the content type is named in words here.
+               `sub.icon` is stored subsection data edited by the EmojiPicker, not chrome. */
+            <option key={sub.id} value={sub.slug}>
+              {sub.icon} {sub.name} ({contentTypeFor(sub.displayStyle).label})
+            </option>
+          ))}
         </select>
       </div>
 
       {/* ── Display Style Badge ── */}
       {selectedSubsection && (
         <div className="mb-4 p-3 bg-[#1a1a1a] rounded-lg border border-[#2a2a2a]">
-          <div className="flex items-center gap-2 text-[13px]">
-            <span className="text-lg">{styleInfo.emoji}</span>
-            <div>
-              <span className="text-white font-medium">{styleInfo.label}</span>
-              <span className="text-[#707070] ml-2">{styleInfo.desc}</span>
-            </div>
-          </div>
+          <ContentTypeBadge displayStyle={displayStyle} showDescription />
         </div>
       )}
 
@@ -179,11 +161,12 @@ export function PostForm({
                 className="w-full h-full object-cover"
               />
               <button
-                type="button"
+                aria-label="Remove cover image"
+                className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-full bg-[color:var(--admin-scrim)] text-[color:var(--admin-primary-text)] opacity-100 transition group-hover:opacity-100 max-[849px]:size-[var(--admin-touch-h)]"
                 onClick={() => onChange({ ...formData, coverImage: '' })}
-                className="absolute top-2 right-2 w-6 h-6 bg-black/70 hover:bg-black rounded-full flex items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition"
+                type="button"
               >
-                ✕
+                <XIcon aria-hidden="true" className="size-3.5" />
               </button>
             </div>
           )}

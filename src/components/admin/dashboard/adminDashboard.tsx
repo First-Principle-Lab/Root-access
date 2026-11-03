@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ArticleIcon, FolderIcon, FolderOpenIcon, TagIcon } from '@phosphor-icons/react';
 import { ContentLoader } from '../../ui/Spinner';
 
 interface Stats {
@@ -42,11 +43,14 @@ export function AdminDashboard() {
     fetchStats();
   }, []);
 
+  /* Same icon per destination as the sidebar (src/components/admin/shell/adminNav.tsx:25), so
+     the card and the nav entry for a destination look like the same thing. The four emoji this
+     replaced were chrome, not data. */
   const cards = [
-    { label: 'Sections', value: stats.sections, href: '/admin/sections', icon: '📁' },
-    { label: 'Subsections', value: stats.subsections, href: '/admin/subsections', icon: '📂' },
-    { label: 'Posts', value: stats.posts, href: '/admin/posts', icon: '📝' },
-    { label: 'Tags', value: stats.tags, href: '/admin/tags', icon: '🏷️' },
+    { label: 'Sections', value: stats.sections, href: '/admin/sections', icon: FolderIcon },
+    { label: 'Subsections', value: stats.subsections, href: '/admin/subsections', icon: FolderOpenIcon },
+    { label: 'Posts', value: stats.posts, href: '/admin/posts', icon: ArticleIcon },
+    { label: 'Tags', value: stats.tags, href: '/admin/tags', icon: TagIcon },
   ];
 
   if (loading) {
@@ -77,9 +81,7 @@ export function AdminDashboard() {
             className="bg-[#101010] p-4 sm:p-6 rounded-xl border border-[#1a1a1a] hover:border-[#2a2a2a] transition group"
           >
             <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-              <span className="text-xl sm:text-2xl opacity-60 group-hover:opacity-80 transition">
-                {card.icon}
-              </span>
+              <card.icon aria-hidden="true" className="size-5 opacity-60 transition group-hover:opacity-90" />
               <div className="text-xs sm:text-[13px] text-[#707070] group-hover:text-[#e5e5e5] transition">
                 {card.label}
               </div>

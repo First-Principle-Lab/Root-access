@@ -1,0 +1,26 @@
+cp4-tags-1440-dark.png  PageHeader, panel rows, icon-only delete with accessible name
+cp4-tags-form-1440-dark.png  FormSection + AdminField label/hint, focus ring on the input
+cp4-tags-fielderror-1440-dark.png  simulated 400; aria-invalid=true aria-describedby=tag-name-hint tag-name-error; value retained
+cp4-tags-dialog-1440-dark.png  ConfirmDialog open on LLM; initial focus=Cancel
+cp4-tags-empty-1440-dark.png  AdminEmptyState with action
+cp4-tags-loadfailure-1440-dark.png  AdminErrorState + retry, where the baseline showed an empty list
+loading-state-present=true
+cp4-sections-loading-1440-dark.png  AdminLoadingState (role=status, aria-busy) replacing ContentLoader
+cp4-sections-1440-dark.png  StatusLabel visible/hidden, named row actions
+cp4-sections-edit-1440-dark.png  FormSection edit form; checkbox states its public consequence
+cp4-posts-1440-dark.png  post rows: ContentTypeBadge + StatusLabel replace the emoji pills
+cp4-subsections-1440-dark.png  subsection rows: ContentTypeBadge replaces the emoji type badge
+cp4-tags-dialog-375-dark.png  ConfirmDialog at 375; trigger was 44x44
+cp4-tags-1440-light.png  PageHeader, panel rows, icon-only delete with accessible name
+cp4-tags-form-1440-light.png  FormSection + AdminField label/hint, focus ring on the input
+cp4-tags-fielderror-1440-light.png  simulated 400; aria-invalid=true aria-describedby=tag-name-hint tag-name-error; value retained
+cp4-tags-dialog-1440-light.png  ConfirmDialog open on LLM; initial focus=Cancel
+cp4-tags-empty-1440-light.png  AdminEmptyState with action
+cp4-tags-loadfailure-1440-light.png  AdminErrorState + retry, where the baseline showed an empty list
+loading-state-present=true
+cp4-sections-loading-1440-light.png  AdminLoadingState (role=status, aria-busy) replacing ContentLoader
+cp4-sections-1440-light.png  StatusLabel visible/hidden, named row actions
+cp4-sections-edit-1440-light.png  FormSection edit form; checkbox states its public consequence
+cp4-posts-1440-light.png  post rows: ContentTypeBadge + StatusLabel replace the emoji pills
+cp4-subsections-1440-light.png  subsection rows: ContentTypeBadge replaces the emoji type badge
+cp4-tags-dialog-375-light.png  ConfirmDialog at 375; trigger was 44x44

@@ -1,4 +1,7 @@
+import { ArrowSquareOutIcon } from '@phosphor-icons/react';
 import { Post } from '@/src/types';
+import { contentTypeFor } from '@/src/components/admin/contentTypes';
+import { StatusLabel } from '@/src/components/ui/status-label';
 
 interface PostListItemProps {
   post: Post;
@@ -8,45 +11,29 @@ interface PostListItemProps {
 }
 
 export function PostListItem({ post, onTogglePublish, onDelete, onEdit }: PostListItemProps) {
-  const getDisplayStyleBadge = (style: string) => {
-    const styles: Record<string, { bg: string; text: string; label: string }> = {
-      'BLOG': { bg: 'bg-blue-950/50', text: 'text-blue-400', label: '📝 Blog' },
-      'PROJECT': { bg: 'bg-purple-950/50', text: 'text-purple-400', label: '🚀 Project' },
-      'TITLE_ONLY': { bg: 'bg-gray-950/50', text: 'text-gray-400', label: '📌 Title' },
-      'blog': { bg: 'bg-blue-950/50', text: 'text-blue-400', label: '📝 Blog' },
-      'project': { bg: 'bg-purple-950/50', text: 'text-purple-400', label: '🚀 Project' },
-      'title_only': { bg: 'bg-gray-950/50', text: 'text-gray-400', label: '📌 Title' },
-    };
-    const s = styles[style] || styles['BLOG'];
-    return (
-      <span className={`px-2 py-0.5 rounded text-[11px] ${s.bg} ${s.text}`}>
-        {s.label}
-      </span>
-    );
-  };
-
   return (
     <div className="bg-[#101010] p-4 sm:p-5 rounded-xl border border-[#1a1a1a] hover:border-[#2a2a2a] transition">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <h3 className="text-[15px] text-white font-medium truncate">{post.title}</h3>
-            {getDisplayStyleBadge(post.subsection.displayStyle)}
-            <span
-              className={`px-2 py-0.5 rounded text-[11px] shrink-0 ${
-                post.published
-                  ? 'bg-green-950/50 text-green-400'
-                  : 'bg-[#1a1a1a] text-[#707070]'
-              }`}
-            >
-              {post.published ? 'Published' : 'Draft'}
-            </span>
+            <ContentTypeBadge displayStyle={post.subsection.displayStyle} />
+            <StatusLabel tone={post.published ? 'live' : 'draft'}>{post.published ? 'Published' : 'Draft'}</StatusLabel>
           </div>
           <div className="text-[13px] text-[#707070] mb-1">
             {post.subsection.name} • {post.views} views
             {post.subsection.displayStyle === 'PROJECT' && post.projectLink && (
               <span className="ml-2">
-                • <a href={post.projectLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">View Project →</a>
+                •{' '}
+                <a
+                  className="inline-flex items-center gap-1 text-[color:var(--admin-info)] underline underline-offset-4 hover:text-[color:var(--admin-heading)]"
+                  href={post.projectLink}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  View project
+                  <ArrowSquareOutIcon aria-hidden="true" className="size-3.5" />
+                </a>
               </span>
             )}
           </div>
@@ -86,5 +73,19 @@ export function PostListItem({ post, onTogglePublish, onDelete, onEdit }: PostLi
         </div>
       </div>
     </div>
+  );
+}
+
+/* The content-type badge is the one piece of this row the posts screen will keep across the
+   redesign, so it reads the shared table in src/components/admin/contentTypes.ts instead of
+   the per-file copy of six emoji strings this file used to carry. */
+function ContentTypeBadge({ displayStyle }: { displayStyle: string }): React.ReactElement {
+  const type = contentTypeFor(displayStyle);
+  const TypeIcon = type.icon;
+  return (
+    <span className="inline-flex items-center gap-1 text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+      <TypeIcon aria-hidden="true" className="size-3.5" />
+      {type.label}
+    </span>
   );
 }

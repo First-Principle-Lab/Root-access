@@ -1,3 +1,4 @@
+import { ArrowSquareOutIcon, RocketIcon } from '@phosphor-icons/react';
 import { Post } from '@/src/types';
 
 interface PostCardProps {
@@ -20,12 +21,10 @@ export function PostCard({ post }: PostCardProps) {
             {post.coverImage ? (
               <img src={post.coverImage} alt="" className="w-full h-full object-cover rounded-xl" />
             ) : (
-              '🚀'
+              <RocketIcon aria-hidden="true" className="size-5 text-[color:var(--admin-subtle)]" />
             )}
           </div>
-          <svg className="w-4 h-4 text-neutral-600 group-hover:text-neutral-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-          </svg>
+          <ArrowSquareOutIcon aria-hidden="true" className="size-4 shrink-0 text-[color:var(--admin-subtle)] transition group-hover:text-[color:var(--admin-heading)]" />
         </div>
         
         <h3 className="text-[15px] font-normal text-white mb-2 group-hover:text-neutral-300 transition">

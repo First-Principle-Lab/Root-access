@@ -4,6 +4,12 @@ import { adminApi } from '@/src/lib/api';
 import { Subsection, TopCategory } from '@/src/types';
 import { useEffect, useState } from 'react';
 import { EmojiPicker } from './EmojiPicker';
+import { ContentTypeBadge } from '@/src/components/admin/contentTypeBadge';
+import { CONTENT_TYPES, contentTypeFor } from '@/src/components/admin/contentTypes';
+import { AdminButton } from '@/src/components/ui/admin-button';
+import { ConfirmDialog } from '@/src/components/ui/confirm-dialog';
+import { Notice } from '@/src/components/ui/notice';
+import { StatusLabel } from '@/src/components/ui/status-label';
 import { ContentLoader } from '../../ui/Spinner';
 
 type DisplayStyleInput = 'blog' | 'project' | 'title_only';
@@ -22,6 +28,9 @@ export function SubsectionsManager() {
   });
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<Subsection | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -61,8 +70,8 @@ export function SubsectionsManager() {
       setEditingSlug(null);
       setShowForm(false);
       fetchData();
-    } catch (err: any) {
-      setError(err.message || 'Operation failed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the subsection.');
     }
   };
 
@@ -85,14 +94,23 @@ export function SubsectionsManager() {
     setShowForm(true);
   };
 
-  const handleDelete = async (slug: string) => {
-    if (!confirm('Are you sure you want to delete this subsection?')) return;
-
+  /* Baseline used window.confirm (src/components/admin/subsections/SubSection.tsx:89), which
+     named neither the subsection nor what happens to its posts. The API restricts the delete
+     while posts reference it (prisma/schema.prisma:81), so the count is stated up front and a
+     refusal is reported inline instead of with window.alert. */
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteError('');
     try {
-      await adminApi.deleteSubsection(slug);
-      fetchData();
-    } catch (err: any) {
-      alert(err.message || 'Delete failed');
+      await adminApi.deleteSubsection(pendingDelete.slug);
+      setPendingDelete(null);
+      void fetchData();
+    } catch (err) {
+      setDeleteError(`${pendingDelete.name} was not deleted. ${err instanceof Error ? err.message : 'The request failed.'}`);
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -101,18 +119,6 @@ export function SubsectionsManager() {
     setEditingSlug(null);
     setFormData({ name: '', isVisible: true, icon: '📄', topCategoryName: '', displayStyle: 'blog' });
     setError('');
-  };
-
-  const getDisplayStyleLabel = (style: string) => {
-    const labels: Record<string, { emoji: string; label: string }> = {
-      'BLOG': { emoji: '📝', label: 'Blog Posts' },
-      'PROJECT': { emoji: '🚀', label: 'Project Cards' },
-      'TITLE_ONLY': { emoji: '📌', label: 'Title List' },
-      'blog': { emoji: '📝', label: 'Blog Posts' },
-      'project': { emoji: '🚀', label: 'Project Cards' },
-      'title_only': { emoji: '📌', label: 'Title List' },
-    };
-    return labels[style] || labels['blog'];
   };
 
   if (loading) {
@@ -200,8 +206,7 @@ export function SubsectionsManager() {
                 }`}
               >
                 <div className="text-left">
-                  <div className="text-[14px] font-medium text-white mb-1">📝 Blog</div>
-                  <div className="text-[11px] text-[#707070]">Timeline with full articles</div>
+                  <ContentTypeHeading displayStyle="blog" />
                 </div>
               </button>
 
@@ -215,8 +220,7 @@ export function SubsectionsManager() {
                 }`}
               >
                 <div className="text-left">
-                  <div className="text-[14px] font-medium text-white mb-1">🚀 Project</div>
-                  <div className="text-[11px] text-[#707070]">Grid cards with links</div>
+                  <ContentTypeHeading displayStyle="project" />
                 </div>
               </button>
 
@@ -230,8 +234,7 @@ export function SubsectionsManager() {
                 }`}
               >
                 <div className="text-left">
-                  <div className="text-[14px] font-medium text-white mb-1">📌 Title Only</div>
-                  <div className="text-[11px] text-[#707070]">Simple title list</div>
+                  <ContentTypeHeading displayStyle="title_only" />
                 </div>
               </button>
             </div>
@@ -267,10 +270,15 @@ export function SubsectionsManager() {
         </form>
       )}
 
+      {deleteError && (
+        <Notice className="mb-[var(--admin-space-4)]" onDismiss={() => setDeleteError('')} tone="error">
+          {deleteError}
+        </Notice>
+      )}
+
       {/* Subsections List */}
       <div className="space-y-3">
         {subsections.map((subsection) => {
-          const styleInfo = getDisplayStyleLabel(subsection.displayStyle);
           return (
             <div
               key={subsection.id}
@@ -279,20 +287,13 @@ export function SubsectionsManager() {
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-1">
-                    <span className="text-lg">{subsection.icon}</span>
+                    {/* Stored subsection data (edited with the EmojiPicker), not chrome. */}
+                    <span aria-hidden="true" className="text-lg">{subsection.icon}</span>
                     <h3 className="text-[15px] text-white font-medium">{subsection.name}</h3>
-                    <span
-                      className={`px-2 py-0.5 rounded text-[11px] ${
-                        subsection.isVisible
-                          ? 'bg-green-950/50 text-green-400'
-                          : 'bg-[#1a1a1a] text-[#707070]'
-                      }`}
-                    >
+                    <StatusLabel tone={subsection.isVisible ? 'live' : 'neutral'}>
                       {subsection.isVisible ? 'Visible' : 'Hidden'}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-[11px] bg-blue-950/50 text-blue-400">
-                      {styleInfo.emoji} {styleInfo.label}
-                    </span>
+                    </StatusLabel>
+                    <ContentTypeBadge displayStyle={subsection.displayStyle} />
                   </div>
                   <div className="text-[13px] text-[#707070]">
                     {subsection.topCategory?.name} • {subsection.postCount} posts • /{subsection.slug}
@@ -300,18 +301,25 @@ export function SubsectionsManager() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <button
+                  <AdminButton
+                    aria-label={`Edit ${subsection.name}`}
                     onClick={() => handleEdit(subsection)}
-                    className="text-[13px] text-[#707070] hover:text-white transition"
+                    size="sm"
+                    variant="ghost"
                   >
                     Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(subsection.slug)}
-                    className="text-[13px] text-red-400 hover:text-red-300 transition"
+                  </AdminButton>
+                  <AdminButton
+                    aria-label={`Delete ${subsection.name}`}
+                    onClick={() => {
+                      setDeleteError('');
+                      setPendingDelete(subsection);
+                    }}
+                    size="sm"
+                    variant="danger"
                   >
                     Delete
-                  </button>
+                  </AdminButton>
                 </div>
               </div>
             </div>
@@ -330,6 +338,38 @@ export function SubsectionsManager() {
           </div>
         )}
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          busy={deleting}
+          description={
+            pendingDelete.postCount
+              ? `${pendingDelete.postCount} ${pendingDelete.postCount === 1 ? 'post' : 'posts'} live in it, so the delete will be refused until they are moved or deleted.`
+              : 'It disappears from the public navigation and from the post editor. No posts are inside it.'
+          }
+          itemName={pendingDelete.name}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={handleDelete}
+          title="Delete subsection"
+        />
+      )}
     </div>
+  );
+}
+
+/* Heading of one display-style choice in the create form. The wording comes from the shared
+   table so the picker cannot promise something the badge on the row does not. */
+function ContentTypeHeading({ displayStyle }: { displayStyle: string }): React.ReactElement {
+  const type = contentTypeFor(displayStyle);
+  const TypeIcon = type.icon;
+  const meta = CONTENT_TYPES[type.key];
+  return (
+    <>
+      <span className="mb-1 flex items-center gap-[var(--admin-space-1)] text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)]">
+        <TypeIcon aria-hidden="true" className="size-4" />
+        {meta.label}
+      </span>
+      <span className="block text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">{meta.description}</span>
+    </>
   );
 }

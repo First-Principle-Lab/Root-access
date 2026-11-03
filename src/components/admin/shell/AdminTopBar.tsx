@@ -28,9 +28,15 @@ export function AdminTopBar({ pathname, menuOpen, onToggleMenu, onLogout }: Admi
         {menuOpen ? <XIcon className="size-5" aria-hidden="true" /> : <ListIcon className="size-5" aria-hidden="true" />}
       </button>
 
-      <h1 className="min-w-0 truncate text-[length:var(--admin-text-panel-title)] font-medium tracking-[var(--admin-tracking-title)] text-[color:var(--admin-heading)]">
+      {/* The visible page title (the screen's own `h1`, e.g. "Tags") says this same thing, so
+          this is the location label rather than a second heading: an admin route has exactly
+          one `h1`, which is what the heading-based screen-reader outline needs. */}
+      <p
+        className="min-w-0 truncate text-[length:var(--admin-text-panel-title)] font-medium tracking-[var(--admin-tracking-title)] text-[color:var(--admin-heading)]"
+        data-admin-location=""
+      >
         {label}
-      </h1>
+      </p>
 
       <div className="ml-auto flex items-center gap-[var(--admin-space-1)]">
         <ThemeToggleButton buttonVariant="ghost" size="icon" title="Toggle color scheme" />

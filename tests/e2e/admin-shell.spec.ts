@@ -44,8 +44,11 @@ test.describe('admin shell - current location on every route', () => {
       await expect(current).toHaveAttribute('href', route.nav);
       await expect(current).toContainText(route.label);
 
-      // top bar names the same location for sighted and SR users
-      await expect(page.getByRole('banner').getByRole('heading', { level: 1 })).toHaveText(route.label);
+      // top bar names the same location for sighted users (checkpoint 4 demoted it from a
+      // second `h1` to a location label, so the screen's own title is the only `h1`)
+      await expect(page.getByRole('banner').locator('[data-admin-location]')).toHaveText(route.label);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
       // every shell affordance is present on every route
       await expect(page.getByRole('navigation', { name: 'Admin sections' })).toBeVisible();

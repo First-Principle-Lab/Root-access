@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { LinkIcon, QuotesIcon } from '@phosphor-icons/react';
+import type { Icon } from '@phosphor-icons/react';
 import { markdownToHtml } from '@/src/lib/markdown';
 
 interface MarkdownEditorProps {
@@ -99,8 +101,10 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
 
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
 
-  // Toolbar buttons
-  const toolbar = [
+  /* Toolbar buttons. Glyph-free entries carry an icon *component* rather than an element:
+     building elements here tripped react-hooks/refs, and a component reference is the value
+     that belongs in a table like this anyway. */
+  const toolbar: { label: string; icon?: Icon; title: string; action: () => void }[] = [
     { label: 'B',   title: 'Bold',          action: () => insertAtCursor('**', '**', 'bold text') },
     { label: 'I',   title: 'Italic',         action: () => insertAtCursor('*', '*', 'italic text') },
     { label: 'H2',  title: 'Heading 2',      action: () => insertAtCursor('## ', '', 'Heading') },
@@ -108,10 +112,10 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
     { label: '`',   title: 'Inline Code',    action: () => insertAtCursor('`', '`', 'code') },
     { label: '```', title: 'Code Block',     action: () => insertAtCursor('```python\n', '\n```', 'code here') },
     { label: '—',   title: 'Divider',        action: () => insertAtCursor('\n---\n') },
-    { label: '❝',   title: 'Blockquote',     action: () => insertAtCursor('> ', '', 'quote') },
+    { label: '', icon: QuotesIcon, title: 'Blockquote', action: () => insertAtCursor('> ', '', 'quote') },
     { label: '•',   title: 'Bullet List',    action: () => insertAtCursor('- ', '', 'list item') },
     { label: '1.',  title: 'Numbered List',  action: () => insertAtCursor('1. ', '', 'list item') },
-    { label: '🔗',  title: 'Link',           action: () => insertAtCursor('[', '](url)', 'link text') },
+    { label: '', icon: LinkIcon, title: 'Link', action: () => insertAtCursor('[', '](url)', 'link text') },
   ];
 
   // Live preview reuses the same renderer as the published page (lib/markdown.ts)
@@ -144,15 +148,16 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
       {/* Toolbar (only in write mode) */}
       {activeTab === 'write' && (
         <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-[#2a2a2a] bg-[#0a0a0a]">
-          {toolbar.map((btn) => (
+          {toolbar.map(({ action, icon: BtnIcon, label, title }) => (
             <button
-              key={btn.title}
+              aria-label={title}
+              className="flex min-h-[var(--admin-control-h)] min-w-[var(--admin-control-h)] items-center justify-center rounded px-2 py-1 font-mono text-xs text-[#707070] transition hover:bg-[#1a1a1a] hover:text-white"
+              key={title}
+              onClick={action}
+              title={title}
               type="button"
-              title={btn.title}
-              onClick={btn.action}
-              className="px-2 py-1 text-xs text-[#707070] hover:text-white hover:bg-[#1a1a1a] rounded transition font-mono"
             >
-              {btn.label}
+              {BtnIcon ? <BtnIcon aria-hidden="true" className="size-3.5" /> : label}
             </button>
           ))}
 

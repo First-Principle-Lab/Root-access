@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { Post } from '@/src/types';
+import { XIcon } from '@phosphor-icons/react';
+import { ContentTypeBadge } from '@/src/components/admin/contentTypeBadge';
 import { MarkdownEditor } from '../post/MarkDownEditor';
 
 interface PostEditModalProps {
@@ -32,17 +34,6 @@ export function PostEditModal({ post, onClose, onSave }: PostEditModalProps) {
   const isBlog      = displayStyle === 'BLOG';
   const isProject   = displayStyle === 'PROJECT';
   const isTitleOnly = displayStyle === 'TITLE_ONLY';
-
-  const getDisplayStyleInfo = (style: string) => {
-    const info: Record<string, { emoji: string; label: string; desc: string }> = {
-      BLOG:       { emoji: '📝', label: 'Blog Post',  desc: 'Full article with content' },
-      PROJECT:    { emoji: '🚀', label: 'Project',    desc: 'Card with external link'   },
-      TITLE_ONLY: { emoji: '📌', label: 'Title Only', desc: 'Simple title list'         },
-    };
-    return info[style] || info['BLOG'];
-  };
-
-  const styleInfo = getDisplayStyleInfo(displayStyle);
 
   // Reuse the same /api/admin/upload endpoint your profile picture uses.
   // It sends base64 → Cloudinary → returns { url, publicId }
@@ -128,16 +119,20 @@ export function PostEditModal({ post, onClose, onSave }: PostEditModalProps) {
           <div>
             <h2 className="text-xl sm:text-2xl text-white font-normal">Edit Post</h2>
             <p className="text-sm text-neutral-500 mt-0.5">
-              {post.subsection.name} · {styleInfo.emoji} {styleInfo.label}
+              <span className="inline-flex flex-wrap items-center gap-[var(--admin-space-2)]">
+                {post.subsection.name}
+                <span aria-hidden="true">·</span>
+                <ContentTypeBadge displayStyle={post.subsection.displayStyle} />
+              </span>
             </p>
           </div>
           <button
+            aria-label="Close editor"
+            className="flex size-[var(--admin-control-h)] shrink-0 items-center justify-center rounded-[var(--admin-radius-control)] text-[color:var(--admin-muted)] transition hover:bg-[color:var(--admin-hover)] hover:text-[color:var(--admin-heading)] max-[849px]:size-[var(--admin-touch-h)]"
             onClick={onClose}
-            className="text-neutral-500 hover:text-white transition"
+            type="button"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <XIcon aria-hidden="true" className="size-5" />
           </button>
         </div>
 
@@ -151,13 +146,7 @@ export function PostEditModal({ post, onClose, onSave }: PostEditModalProps) {
 
           {/* Display Style Info */}
           <div className="p-3 bg-[#1a1a1a] rounded-lg border border-[#2a2a2a]">
-            <div className="flex items-center gap-2 text-[13px]">
-              <span className="text-lg">{styleInfo.emoji}</span>
-              <div>
-                <span className="text-white font-medium">{styleInfo.label}</span>
-                <span className="text-[#707070] ml-2">{styleInfo.desc}</span>
-              </div>
-            </div>
+            <ContentTypeBadge displayStyle={post.subsection.displayStyle} showDescription />
           </div>
 
           {/* ── Title ── */}
@@ -190,11 +179,12 @@ export function PostEditModal({ post, onClose, onSave }: PostEditModalProps) {
                     className="w-full h-full object-cover"
                   />
                   <button
-                    type="button"
+                    aria-label="Remove cover image"
+                    className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-full bg-[color:var(--admin-scrim)] text-[color:var(--admin-primary-text)] transition max-[849px]:size-[var(--admin-touch-h)]"
                     onClick={() => setFormData({ ...formData, coverImage: '' })}
-                    className="absolute top-2 right-2 w-6 h-6 bg-black/70 hover:bg-black rounded-full flex items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition"
+                    type="button"
                   >
-                    ✕
+                    <XIcon aria-hidden="true" className="size-3.5" />
                   </button>
                 </div>
               )}

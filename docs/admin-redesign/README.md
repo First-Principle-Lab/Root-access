@@ -230,7 +230,7 @@ authenticated routes. Files:
 | `src/components/admin/shell/adminRoutes.ts` | route table (`/admin` + 5 sections, 2 auth screens) and the two predicates that decide current-location and shell-vs-no-shell |
 | `src/components/admin/shell/adminNav.tsx` | maps those routes onto Phosphor icons (`SquaresFourIcon`, `FolderIcon`, `FolderOpenIcon`, `ArticleIcon`, `TagIcon`, `UserIcon`) replacing the 📊 📁 📂 📝 🏷️ 👤 nav emoji |
 | `src/components/admin/shell/AdminSidebar.tsx` | 240px panel: brand, `aria-current="page"` nav, "View site" (ordinary external link, `target="_blank" rel="noopener noreferrer"`), "Log out" |
-| `src/components/admin/shell/AdminTopBar.tsx` | 64px bar: current location as the visible heading, 44px hamburger with `aria-expanded` + `aria-controls`, `ThemeToggleButton` from `src/components/spaceui/theme-toggle.tsx`, "Log out" |
+| `src/components/admin/shell/AdminTopBar.tsx` | 64px bar: current location as a visible label (`<p data-admin-location>`, demoted from `h1` in checkpoint 4 so the screen's own title is the only `h1`), 44px hamburger with `aria-expanded` + `aria-controls`, `ThemeToggleButton` from `src/components/spaceui/theme-toggle.tsx`, "Log out" |
 | `src/hooks/useFocusTrap.ts` | Escape + Tab containment + focus restore, shared with the checkpoint-4 dialog |
 | `src/components/admin/adminLayout.tsx` | composition, auth redirect (unchanged `adminApi.logout()` + `checkAuth()` path), drawer/scrim state, skip link |
 | `src/app/admin/admin.css` | unchanged in this step; the shell consumes its tokens |
@@ -245,7 +245,7 @@ built tree, output in `/tmp/cora/evidence/admin-run-iter3/cp3-playwright-final.l
 
 | Check | Result |
 | --- | --- |
-| Exactly one `a[aria-current="page"]` per shell route, and the top bar heading names the same section, on all 6 routes | pass |
+| Exactly one `a[aria-current="page"]` per shell route, and the top bar location label names the same section, on all 6 routes. Checkpoint 4 re-ran this after demoting that label from a second `h1`; the same test now also asserts `getByRole('heading', { level: 1 })` count is exactly 1 per route | pass |
 | Live-site link, theme control, logout, `<main>` and skip link present on every route | pass |
 | Theme: dark default → toggle → `localStorage.site-theme = light` → survives reload → survives admin→public (popup) → survives public→admin | pass |
 | No wrong-theme flash: `<html>` class never contains `dark` during a light-prefixed load, and next-themes' blocking script precedes the first rendered body element | pass |
@@ -270,6 +270,101 @@ drawer starts below the 64px bar. (2) Chromium 1248 drops a single
 afterwards (no `focusin` at all under the suite's `prefers-reduced-motion: reduce`),
 so `useFocusTrap` re-asserts the panel's first focusable for ~640ms instead of focusing
 once; the keyboard path alone hid this because keyboard activation does not re-focus.
+
+### 4.3 Control primitives delivered (checkpoint 4)
+
+Every primitive named in §4 "Control primitives" now exists, is token-driven, and is used by
+real screens. Files:
+
+| File | Exports | Replaces |
+| --- | --- | --- |
+| `src/components/ui/admin-button.tsx` | `AdminButton`, `adminButtonVariants`, `adminButtonClass` | hand-styled `bg-white text-[#0a0a0a] rounded-lg` buttons (50 raw `<button>` elements in `src/components/admin` at baseline, 39 now, and every new control uses the primitive); `adminButtonClass` is the `<Link>`-safe skin |
+| `src/components/ui/admin-field.tsx` | `AdminField`, `AdminInput`, `AdminTextarea`, `AdminSelect`, `AdminCheckbox`, `useAdminFieldProps` | hand-labelled inputs with `focus:outline-none` and no error association |
+| `src/components/ui/status-label.tsx` | `StatusLabel` (tones `neutral/live/draft/hidden/danger/info`) | the `bg-green-950/50 text-green-400` and `bg-[#1a1a1a] text-[#707070]` pills copied across four screens |
+| `src/components/ui/notice.tsx` | `Notice` | every `window.alert(...)` and the `bg-red-950/50` error boxes |
+| `src/components/ui/admin-state.tsx` | `AdminLoadingState`, `AdminEmptyState`, `AdminErrorState` | `ContentLoader` on every screen and the silent "empty list" that a failed request used to produce |
+| `src/components/ui/confirm-dialog.tsx` | `ConfirmDialog` | all four `window.confirm()` calls |
+| `src/components/ui/form-section.tsx` | `FormSection` | undifferentiated `<div className="bg-[#101010] p-6">` form boxes |
+| `src/components/ui/page-header.tsx` | `PageHeader` | four different hand-written page titles (28px / `text-2xl sm:text-[28px]` / no description) |
+| `src/components/admin/contentTypes.ts` + `contentTypeBadge.tsx` | `CONTENT_TYPES`, `contentTypeFor`, `contentTypeKey`, `ContentTypeBadge` | the six-row emoji table duplicated in `postListItem`, `postForm`, `PostEditModal`, `SubSection` and the 📝/🚀/📌 badges |
+| `src/components/admin/tags/tagsManager.tsx`, `src/components/admin/section/sectionManager.tsx` | converted screens | see verification below |
+
+Hard-coded colour literals under `src/components/admin` went from **294 in 17 files** (§4.1)
+to **251 in 15 files** (`grep -rEoh "#[0-9a-fA-F]{3,8}\b" src/components/admin --include=*.tsx`).
+Files converted in this checkpoint reached zero: `tagsManager.tsx` 10 → 0 and
+`sectionManager.tsx` 12 → 0 (both measured with the same grep against `HEAD`). Partially,
+because those screens belong to later checkpoints: `SubSection.tsx` 25 → 20,
+`postListItem.tsx` 6 → 5, `postForm.tsx` and `PostEditModal.tsx` 32 → 31 each,
+`profileManager.tsx` unchanged at 19. Nothing was added.
+
+Two deliberate decisions inside the primitives:
+
+- `AdminField` passes the control's `id`, `aria-invalid` and `aria-describedby` down through
+  context (`useAdminFieldProps`) rather than `cloneElement`, so a control also works outside a
+  field, and hint + error share one mechanism. The hint is replaced by the error while one is
+  present, so a field never carries two competing explanations.
+- `ConfirmDialog` reuses `src/hooks/useFocusTrap.ts` (the same hook the drawer uses, including
+  its re-assert workaround) and puts initial focus on **Cancel**: the hook focuses the panel's
+  first focusable, which is why Cancel is first in the DOM. Enter on an unread dialog cannot
+  delete anything. The dialog is mounted only while open, so "cancel changes nothing" is a
+  structural property: no request exists unless Confirm was pressed.
+- The dialog is `z-[70]`, above the checkpoint-3 top bar (`z-50`), which the drawer trap
+  discovered is the wrong order for a modal: the drawer sits *below* the bar on purpose, a
+  modal must not.
+
+Emoji policy applied: chrome emoji are gone (`postListItem`, `postForm`, `PostEditModal`,
+`SubSection` badges, the `✕` close/remove controls in both editors, the `❝`/`🔗` markdown
+toolbar buttons, the dashboard's four stat-card emoji). What remains is *data*:
+`src/components/admin/subsections/EmojiPicker.tsx` and the `Subsection.icon` column it edits
+(rendered in the subsection list and in `<option>` text, where only text is allowed), plus the
+`icon: '📄'` form default that seeds that column. The stored-value reads are marked
+`aria-hidden` so a screen reader does not announce a picture of a keyboard as content.
+
+No `confirm()` or `alert()` call site is left under `src/components/admin`. The words still
+appear in code comments that record what was replaced, so the search skips comment lines:
+
+```
+$ grep -rnE "(^|[^a-zA-Z.`])(confirm|alert)\(" src/components/admin --include=*.tsx \
+      | grep -vE ":[0-9]+: (\*|//|/\*)" | grep -v 'role="alert"'
+$                 # no output, exit status 1
+```
+
+Every remaining hit of a looser search is prose inside a comment. Posts
+(`src/components/admin/post/PostsManager.tsx`) keeps its current list markup — checkpoint 6
+rebuilds that screen — but its delete now opens the shared dialog, and its publish/unpublish
+and delete failures are inline `Notice`s instead of `window.alert`.
+
+Verification, on the built tree (`npm run build` clean, `npx tsc --noEmit` clean):
+
+| Check | Evidence | Result |
+| --- | --- | --- |
+| Dialog names the item and the consequence | `getByRole('dialog')` accessible name matches `/Delete tag.*<name>/` and the refusal sentence is visible | pass |
+| Initial focus is Cancel, not Delete | `document.activeElement.textContent === 'Cancel'` | pass |
+| Focus is trapped | 8 × Tab and 8 × Shift+Tab, `activeElement.closest('[data-slot="confirm-dialog"]')` true every time | pass |
+| Focus returns to the control that opened it | after `Escape`, `activeElement.ariaLabel === 'Delete tag <name>'` | pass |
+| Cancelling a destructive action changes nothing | row still present after `Escape` and after the Cancel button; second run over the same DB is identical (`SELECT count(*) FROM "Tag"` = 4 before and after) | pass |
+| Confirming really deletes | row gone, and still gone after `page.reload()` (real `DELETE /api/admin/tags/[tagSlug]`) | pass |
+| Failed delete is actionable and non-destructive | simulated `409` with the API's own body → `role="alert"` text = `Cannot delete tag with 3 associated post(s). Remove the tag from posts first.`, dialog closed, row still there | pass |
+| Failed save keeps input and names the field | simulated `400` `Tag already exists` → `aria-invalid="true"`, `aria-describedby="tag-name-hint tag-name-error"`, `#tag-name-error` text = the message, `input.value === 'LLM'` | pass |
+| Same dialog guards a cascade | Sections: accessible name `Delete section <name>` + the "deleted with it / refused until those posts are moved" sentence | pass |
+| 44px targets on the converted controls at 375px | primary action, row delete (32→44px after the `icon-sm` mobile bump), and both dialog buttons ≥44px; zero horizontal overflow with the dialog open | pass |
+| One `h1` per admin route | `getByRole('heading', { level: 1 })` count = 1 on all 6 routes, in `admin-shell.spec.ts` | pass |
+| `contentTypeFor` covers both key spellings | 4 unit tests (`tests/unit/admin-content-types.test.ts`), including `BLOG`/`blog` equivalence and the blog fallback | pass |
+| No new lint debt | `src/components/admin` + `src/app/admin` + `src/components/ui`: **9 errors / 5 warnings**, down from the 19 / 5 of §4.1 with 0 new. Clean now: `tags/`, `section/`, `subsections/`, `shell/`, `PostsManager.tsx`, `postListItem.tsx` and all of `src/components/ui`. The 9 that remain are in files this checkpoint did not convert (`LoginPage` 2, `MarkDownEditor` 2 — both `react-hooks/refs`, re-verified as present at `HEAD`, `SignUpPage` 1, `blogPost` 1, `titleOnlyItem` 1 `react-hooks/purity`, `profileManager` 2); the 5 warnings are the pre-existing `no-img-element` set | pass |
+| Contrast / type floor on the converted screens | computed probe on `/admin/tags` and `/admin/sections`, both themes: no visible text under 12px and no pair below 4.5:1 (the only flagged node is the theme toggle's `sr-only` label, 1×1 clipped) | pass |
+
+Suites: `npx playwright test` 23/23 (17 shell + 6 new in `tests/e2e/admin-controls.spec.ts`),
+`npx vitest run` 10/10. Screenshots: `docs/admin-redesign/after-controls/`
+(`capture-notes.txt` records what each file proves; the simulated-failure shots say so in
+their own filenames).
+
+Open items this checkpoint found and did **not** fix, because the screens are later
+checkpoints' work: `/admin/posts` and `/admin/subsections` still carry their baseline
+hard-coded hex and 11px text, and in **light** mode their legacy white `h1` sits on white
+(`rgb(255,255,255)` on `rgb(255,255,255)`, measured) — the same "admin ignores the theme"
+defect recorded in §1, now visible on two specific headings. Checkpoints 5 and 6 replace both
+screens.
+
 
 ### Colour
 
@@ -348,11 +443,16 @@ the admin reuses those exact two numbers so one mental model covers the whole pr
   `outline: none` without a replacement.
 - Button states: default, hover (`--admin-hover` or `--admin-primary-hover`),
   focus-visible, active (1px translate), disabled (`opacity .5`, `cursor: not-allowed`,
-  still focusable), loading (spinner from `src/components/ui/Spinner.tsx`, label kept,
+  still focusable), loading (spinner kept inline with the label,
   `aria-busy="true"`).
 - Field states: default, hover, focus-visible, `aria-invalid` + `--admin-danger` border,
   disabled. Error text sits below the field and is referenced by `aria-describedby`;
-  hint text uses the same mechanism.
+  hint text uses the same mechanism. Implemented and verified in §4.3.
+- Spinner source: `src/components/ui/Spinner.tsx` is the legacy white-arc component this
+  document originally named for the loading state, and its `role="status"` + `aria-label`
+  would fight the button's own busy state. The admin primitives use Phosphor
+  `CircleNotchIcon` with `aria-hidden` + `aria-busy` on the control instead, matching the
+  rest of the admin chrome; `Spinner.tsx` is left in place for the public site.
 - Row states: hover tint, `:focus-within` tint, and a visible pressed state for
   publish/unpublish so a row never looks half-applied.
 - Motion: 150–180ms ease on colour and transform only; drawer 250ms; all of it collapses

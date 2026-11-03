@@ -8,6 +8,8 @@ import { PostForm } from './postForm';
 import { PostListItem } from './postListItem';
 import { PostEditModal } from './PostEditModal';
 import { ContentLoader } from '../../ui/Spinner';
+import { ConfirmDialog } from '@/src/components/ui/confirm-dialog';
+import { Notice } from '@/src/components/ui/notice';
 
 const INITIAL_FORM_DATA = {
   title: '',
@@ -33,6 +35,10 @@ export function PostsManager() {
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [error, setError] = useState('');
   const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Post | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     fetchSections();
@@ -58,7 +64,7 @@ export function PostsManager() {
       );
       
       const postsResults = await Promise.all(postsPromises);
-      const allPostsArray = postsResults.flatMap((r: any) => r.posts || []);
+      const allPostsArray = postsResults.flatMap((r) => (r as { posts?: Post[] }).posts ?? []);
       setAllPosts(allPostsArray);
       setPosts(allPostsArray);
     } catch (error) {
@@ -126,8 +132,8 @@ export function PostsManager() {
       setFormData(INITIAL_FORM_DATA);
       setShowForm(false);
       fetchSections();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create post');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the post.');
     }
   };
 
@@ -144,6 +150,7 @@ export function PostsManager() {
   };
 
   const handleTogglePublish = async (post: Post) => {
+    setActionError('');
     try {
       await adminApi.togglePublish(
         post.subsection.slug,
@@ -151,19 +158,33 @@ export function PostsManager() {
         !post.published
       );
       fetchSections();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update post');
+    } catch (err) {
+      // Reported where it happened instead of in a modal that blocks the list (the
+      // baseline used window.alert, src/components/admin/post/PostsManager.tsx:155).
+      setActionError(
+        `${post.title} is still ${post.published ? 'published' : 'a draft'}. ${
+          err instanceof Error ? err.message : 'The request failed.'
+        }`,
+      );
     }
   };
 
-  const handleDelete = async (post: Post) => {
-    if (!confirm('Are you sure you want to delete this post?')) return;
-
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setActionError('');
     try {
-      await adminApi.deletePost(post.subsection.slug, post.slug);
+      await adminApi.deletePost(pendingDelete.subsection.slug, pendingDelete.slug);
+      const title = pendingDelete.title;
+      setPendingDelete(null);
       fetchSections();
-    } catch (err: any) {
-      alert(err.message || 'Delete failed');
+      setActionError('');
+      setNotice(`${title} was deleted.`);
+    } catch (err) {
+      setActionError(`${pendingDelete.title} was not deleted. ${err instanceof Error ? err.message : 'The request failed.'}`);
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -199,6 +220,23 @@ export function PostsManager() {
         </button>
       </div>
 
+      {actionError && (
+        <Notice
+          assertive
+          className="mb-[var(--admin-space-4)]"
+          onDismiss={() => setActionError('')}
+          tone="error"
+        >
+          {actionError}
+        </Notice>
+      )}
+
+      {notice && (
+        <Notice className="mb-[var(--admin-space-4)]" onDismiss={() => setNotice('')} tone="success">
+          {notice}
+        </Notice>
+      )}
+
       {/* Subsection Filter */}
       <SubsectionFilter
         subsections={allSubsections}
@@ -230,7 +268,11 @@ export function PostsManager() {
             key={post.id}
             post={post}
             onTogglePublish={handleTogglePublish}
-            onDelete={handleDelete}
+            onDelete={(post) => {
+              setActionError('');
+              setNotice('');
+              setPendingDelete(post);
+            }}
             onEdit={handleEdit}
           />
         ))}
@@ -249,6 +291,22 @@ export function PostsManager() {
           </div>
         )}
       </div>
+
+      {/* Deleting a post is unrecoverable (there is no trash), so the row control opens the
+          shared confirmation dialog instead of window.confirm, and it says where the post
+          lives so the person can tell two same-titled posts apart. */}
+      {pendingDelete && (
+        <ConfirmDialog
+          busy={deleting}
+          description={`It lives in ${pendingDelete.subsection.name} and is ${
+            pendingDelete.published ? 'live on the public site' : 'a draft'
+          }. Deleting removes it permanently; there is no undo.`}
+          itemName={pendingDelete.title}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={handleDelete}
+          title="Delete post"
+        />
+      )}
 
       {/* Edit Modal */}
       {editingPost && (
