@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { GenerativeBackground } from './GenerativeBackground';
 import { ProjectLogo } from './ProjectLogo';
 
 interface Post {
@@ -58,6 +59,7 @@ export function SubsectionContent({ subsection, slug }: { subsection: Subsection
 
   return (
     <main id="main-content" className="site-container archive-page">
+      <GenerativeBackground />
       <div className="archive-heading">
         {subsection.topCategory && <p className="archive-kicker">{subsection.topCategory.name}</p>}
         <h1 className="site-title">{subsection.name}</h1>

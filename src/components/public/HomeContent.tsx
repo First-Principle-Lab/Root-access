@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { GenerativeBackground } from './GenerativeBackground';
 import { SocialLinks } from './SocialLinks';
 import { ProjectLogo } from './ProjectLogo';
 import { orderCategories, orderSections } from '@/src/lib/siteOrder';
@@ -44,6 +45,7 @@ export function HomeContent({ profile, subsections, name, projects }: { profile:
 
   return (
     <div className="site-container home-page">
+      <GenerativeBackground />
       <h1 className="site-title">{name}</h1>
       {profile && <div className="home-affiliation">
         <span>Founding engineer at</span>
