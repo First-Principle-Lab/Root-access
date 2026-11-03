@@ -493,6 +493,32 @@ html:not(.dark) .site-shell .site-brand { color: #111; }
   .site-mobile-socials .site-social-links { gap: 12px 18px; }
 }
 
+/* Admin control cursors. Tailwind v4 preflight keeps `appearance: button` but gives buttons no
+   cursor, so every admin control renders the default arrow. Scoped to the `.admin-shell` wrapper
+   (src/app/admin/layout.tsx) the same way the `.site-shell` rules above scope the public site. */
+.admin-shell button,
+.admin-shell [role="button"],
+.admin-shell input[type="button"],
+.admin-shell input[type="submit"],
+.admin-shell input[type="reset"],
+.admin-shell input[type="file"],
+.admin-shell input[type="checkbox"],
+.admin-shell input[type="radio"],
+.admin-shell select,
+.admin-shell summary,
+.admin-shell label:has(input[type="checkbox"]),
+.admin-shell label:has(input[type="radio"]) { cursor: pointer; }
+/* Disabled controls stay visibly non-interactive. */
+.admin-shell button:disabled,
+.admin-shell [role="button"][aria-disabled="true"],
+.admin-shell input[type="button"]:disabled,
+.admin-shell input[type="submit"]:disabled,
+.admin-shell input[type="reset"]:disabled,
+.admin-shell input[type="file"]:disabled,
+.admin-shell input[type="checkbox"]:disabled,
+.admin-shell input[type="radio"]:disabled,
+.admin-shell select:disabled { cursor: not-allowed; }
+
 @theme inline {
   --color-destructive-foreground: var(--destructive-foreground);
   --color-sidebar-ring: var(--sidebar-ring);
