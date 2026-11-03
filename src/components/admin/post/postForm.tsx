@@ -231,15 +231,16 @@ export function PostForm({
 
             {/* URL fallback */}
             <input
-              type="url"
+              type="text"
+              inputMode="url"
               value={formData.coverImage}
               onChange={(e) => onChange({ ...formData, coverImage: e.target.value })}
-              placeholder="or paste an image URL..."
+              placeholder="Image URL or /projects/cover.png"
               className="flex-1 px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition"
             />
           </div>
           <p className="text-[11px] text-[#707070] mt-1.5">
-            Uploads go to Cloudinary (max 5MB) · You can also paste any public image URL
+            Uploads go to Cloudinary (max 5MB) · You can also use a public image URL or a site path such as /projects/cover.png
           </p>
         </div>
       )}
