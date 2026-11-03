@@ -10,7 +10,7 @@ export default function SiteLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="site-shell dark">
+    <div className="site-shell">
       <a className="site-skip-link" href="#main-content">Skip to content</a>
       <Suspense fallback={<SidebarSkeleton />}>
         <PublicSidebarServer />

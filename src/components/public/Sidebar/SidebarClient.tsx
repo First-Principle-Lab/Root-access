@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { SocialLinks } from '../SocialLinks';
 import { orderSections } from '@/src/lib/siteOrder';
+import { ThemeToggleButton } from '@/src/components/spaceui/theme-toggle';
 
 interface LayoutData {
   admin: {
@@ -30,18 +31,6 @@ interface LayoutData {
 export function SidebarClient({ layoutData }: { layoutData: LayoutData }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('site-theme');
-    const preferred = saved ? saved === 'dark' : true;
-    document.querySelector('.site-shell')?.classList.toggle('dark', preferred);
-  }, []);
-
-  const toggleTheme = () => {
-    const next = !document.querySelector('.site-shell')?.classList.contains('dark');
-    localStorage.setItem('site-theme', next ? 'dark' : 'light');
-    document.querySelector('.site-shell')?.classList.toggle('dark', next);
-  };
 
   const profile = layoutData.admin.profile;
   const avatarSrc = profile?.profilePicture?.startsWith('https://res.cloudinary.com/')
@@ -68,9 +57,7 @@ export function SidebarClient({ layoutData }: { layoutData: LayoutData }) {
           ))}
           {profile?.resumeUrl && <a href={profile.resumeUrl} target="_blank" rel="noopener noreferrer">Resume <span aria-hidden="true">↗</span></a>}
           {profile && <div className="site-desktop-socials"><SocialLinks profile={profile} compact /></div>}
-          <button className="site-theme-button" type="button" onClick={toggleTheme} aria-label="Toggle color scheme" title="Toggle color scheme">
-            ◐
-          </button>
+          <ThemeToggleButton className="site-theme-button" buttonVariant="ghost" size="md" title="Toggle color scheme" />
           <div className="site-mobile-socials">
             {profile && <SocialLinks profile={profile} />}
           </div>
