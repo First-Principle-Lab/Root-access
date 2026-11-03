@@ -1,9 +1,39 @@
 import { z } from "zod";
 
-const coverImageSchema = z.string().refine(
+export const coverImageSchema = z.string().refine(
   (value) => value === "" || z.url().safeParse(value).success || /^\/(?!\/)[^\s]+$/.test(value),
   "Use a full image URL or a site path starting with /",
 ).optional();
+
+/* The same rule as a sentence a person can act on, for the editor's own project-link field
+   (an empty value is allowed here: `postsSchema` below lets a non-project post carry "", and
+   the create/update routes store that as null). */
+export const projectLinkSchema = z.string().refine(
+  (value) => value === "" || z.url().safeParse(value).success,
+  "Use a full link starting with https://",
+);
+
+/* Post editor draft (checkpoint 6 of docs/admin-redesign-plan.md). The endpoints above validate
+   what arrives over HTTP; this validates what is typed into `/admin/posts/new` and
+   `/admin/posts/edit/...` *before* a request is made, in the shapes the form actually holds:
+   tags as one comma-separated string and archive year as raw text input. The style-specific
+   rules (a writing needs a body, a project needs its link) are layered on in
+   src/lib/postEditor.ts because they depend on the subsection, which is not part of the payload. */
+export const postDraftSchema = z.object({
+  title: z.string().trim().min(1, "A post needs a title"),
+  description: z.string().trim().max(600, "Keep the description under 600 characters").optional(),
+  content: z.string().optional(),
+  excerpt: z.string().trim().max(400, "Keep the excerpt under 400 characters").optional(),
+  coverImage: coverImageSchema,
+  tags: z.string().optional(),
+  projectLink: projectLinkSchema.optional(),
+  archiveYear: z.string().refine(
+    (value) => value === "" || (/^\d{4}$/.test(value) && Number(value) >= 1900 && Number(value) <= 2100),
+    "Use a year between 1900 and 2100, or leave it empty",
+  ).optional(),
+});
+
+export type PostDraftInput = z.input<typeof postDraftSchema>;
 
 export const postsSchema = z.object({
   title: z.string().min(1, "Title is required"),

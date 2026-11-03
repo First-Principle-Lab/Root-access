@@ -1,19 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowSquareOutIcon, TrashIcon } from '@phosphor-icons/react';
+import { ArrowSquareOutIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react';
 import type { PostListItem } from '@/src/types';
 import { ContentTypeBadge } from '@/src/components/admin/contentTypeBadge';
 import { adminButtonClass, AdminButton } from '@/src/components/ui/admin-button';
 import { StatusLabel } from '@/src/components/ui/status-label';
 import { formatRelativeTime, publicPostPath } from '@/src/components/admin/dashboard/recentEdits';
+import { postEditPath } from '@/src/lib/postEditor';
 
 interface PostListItemRowProps {
   post: PostListItem;
   /** "Now" in epoch ms, captured once per list load by the screen. */
   now: number | null;
   busy?: boolean;
-  onEdit: (post: PostListItem) => void;
   onTogglePublish: (post: PostListItem) => void;
   onDelete: (post: PostListItem) => void;
 }
@@ -29,7 +29,6 @@ export function PostListItemRow({
   now,
   post,
   onDelete,
-  onEdit,
   onTogglePublish,
 }: PostListItemRowProps): React.ReactElement {
   const hierarchy = [post.subsection.topCategory?.name, post.subsection.name].filter(Boolean).join(' / ');
@@ -94,10 +93,17 @@ export function PostListItemRow({
             <ArrowSquareOutIcon aria-hidden="true" className="size-4" />
           </Link>
         )}
-        <AdminButton onClick={() => onEdit(post)} size="sm" variant="secondary">
+        {/* Edit is a page, not a modal (checkpoint 6): the address carries the post, so it
+            survives a reload, can be handed to someone else, and the editor's own
+            unsaved-changes guard can protect it. */}
+        <Link
+          aria-label={`Edit ${post.title}`}
+          className={adminButtonClass({ size: 'sm', variant: 'secondary' })}
+          href={postEditPath(post.subsection.slug, post.slug)}
+        >
+          <PencilSimpleIcon aria-hidden="true" className="size-4" />
           Edit
-          <span className="sr-only"> {post.title}</span>
-        </AdminButton>
+        </Link>
         <AdminButton loading={busy} onClick={() => onTogglePublish(post)} size="sm" variant="ghost">
           {post.published ? 'Unpublish' : 'Publish'}
           <span className="sr-only"> {post.title}</span>

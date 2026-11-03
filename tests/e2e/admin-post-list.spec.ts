@@ -202,7 +202,7 @@ test.describe('posts list at 375px', () => {
     await page.goto('/admin/posts');
 
     await expect(adminMain(page).getByRole('heading', { level: 1, name: 'Posts' })).toBeVisible();
-    await expect(adminMain(page).getByRole('button', { name: 'New post' })).toBeVisible();
+    await expect(adminMain(page).getByRole('link', { name: /New post/ })).toBeVisible();
     await expect(rows(page)).toHaveCount(10);
 
     // Row actions stay reachable on touch: the delete control is a 44px target.

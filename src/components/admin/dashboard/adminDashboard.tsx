@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowSquareOutIcon, CaretRightIcon, PencilSimpleIcon } from '@phosphor-icons/react';
 import { adminApi, requestFailureMessage } from '@/src/lib/api';
+import { postEditPath } from '@/src/lib/postEditor';
 import { contentTypeFor } from '@/src/components/admin/contentTypes';
 import type { DashboardStats, PostListItem } from '@/src/types';
 import { adminButtonClass } from '@/src/components/ui/admin-button';
@@ -192,7 +193,7 @@ export function AdminDashboard() {
                       <Link
                         aria-label={`Edit ${post.title}`}
                         className={adminButtonClass({ size: 'sm', variant: 'ghost' })}
-                        href="/admin/posts"
+                        href={postEditPath(post.subsection.slug, post.slug)}
                       >
                         Edit
                       </Link>

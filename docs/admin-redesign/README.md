@@ -489,10 +489,102 @@ dark/light, overflow=0 and row counts recorded in `capture-notes.txt`) and
 set contains all six screens at both widths in both themes, which is the shape checkpoint 5 names).
 Logs: `/tmp/cora/evidence/admin-run-iter6-{build,build2,eslint,playwright,playwright-posts,shots,vitest}.log`.
 
-Still open for checkpoint 6 (the editor half): full-width writing area, persistent save/publish
-bar, explicit preview, unsaved-changes warning, project-only URL/image fields in a rebuilt editor,
-the compact title-only flow, and the per-display-style create→publish→delete browser lifecycle on a
-re-seeded database. `postForm.tsx` / `PostEditModal.tsx` (31 hex literals each) are that work.
+Still open for checkpoint 6 at the time of writing (the editor half): full-width writing area,
+persistent save/publish bar, explicit preview, unsaved-changes warning, project-only URL/image
+fields in a rebuilt editor, the compact title-only flow, and the per-display-style
+create→publish→delete browser lifecycle on a re-seeded database. `postForm.tsx` /
+`PostEditModal.tsx` (31 hex literals each) are that work — **closed by §4.6**, which deletes both
+files and adds `tests/e2e/admin-post-editor.spec.ts`.
+
+
+### 4.6 Post editor page (checkpoint 6, editor half)
+
+Delivered on `feat/admin-redesign-run`. The editor is now a page, for both halves of
+"create/edit", at an address a person can reload or hand to someone else:
+
+| File | Role |
+| --- | --- |
+| `src/app/admin/posts/new/page.tsx` | thin wrapper: `AdminLayout` + `<PostEditor mode="create" />` |
+| `src/app/admin/posts/edit/[subsectionSlug]/[postSlug]/page.tsx` | thin wrapper, `await params`, `<PostEditor mode="edit" … />`; the subsection slug is carried because every post endpoint is addressed as `/api/admin/subsections/[slug]/posts/[postSlug]` — no second set of routes was invented for the editor |
+| `src/components/admin/post/PostEditor.tsx` | the screen: PageHeader, Placement / Content / Writing / Project details / Cover image / Tags panels, persistent save-and-publish bar, unsaved-changes guard |
+| `src/lib/postEditor.ts` | the pure rules both modes share: draft shape, `postToDraft`, `fieldsForStyle`, `validatePostDraft`, `isDraftDirty`, `buildPostPayload`, `POST_FIELD_IDS`, `postEditPath` |
+| `src/schema/postsSchema.ts` | `postDraftSchema` (+ exported `coverImageSchema`, `projectLinkSchema`): the form-side zod contract, next to the endpoint-side `postsSchema` / `updatePostSchema` it mirrors |
+| `src/components/admin/post/MarkDownEditor.tsx` | rewritten on tokens: Write/Preview as named pressed-buttons, toolbar controls ≥ 36 px, upload through `adminApi.uploadImage`, preview re-coloured by `.admin-md-preview` |
+| `src/app/admin/admin.css` | the `.admin-md-preview` block (§4.6 note 3) |
+| `src/components/admin/post/PostsManager.tsx`, `postListItem.tsx`, `dashboard/adminDashboard.tsx` | the modal and the inline create form are gone; Edit is a `<Link>` to the editor address (which also deletes the "refetch the post so the modal can open it" round trip) and the dashboard's *Recently edited* rows link straight into the editor |
+| `postForm.tsx`, `PostEditModal.tsx` | **deleted** (62 hard-coded hex literals, two divergent copies of the same form) |
+
+Plan line 41 mapped to what is on the tree:
+
+| Requirement | Implementation | Proof |
+| --- | --- | --- |
+| full-width writing area | the editor column is `--admin-editor-max` (880 px) and the textarea spans it at `--admin-text-editor` 16 px / `--admin-leading-editor` | `post editor at 375px` — textarea width ≥ 80 % of the viewport, no horizontal overflow |
+| persistent save/publish area | `fixed bottom-0` bar, `min-[850px]:left-[var(--admin-sidebar-w)]`, `z-[35]`, with `Save changes` (disabled while clean) + `Publish`/`Unpublish` + an `aria-live` save-state line | same test asserts the bar `toBeInViewport()` before any scroll and the button ≥ 44 px |
+| explicit preview | Write / Preview panes in `MarkDownEditor`; the preview renders the same `markdownToHtml` output the published page serves | `the preview pane renders the same markdown…` asserts `h1` = "Preview heading" and `strong` = "bold", then that the source text is intact after switching back |
+| unsaved-changes warning | `beforeunload` while dirty, plus a `ConfirmDialog` ("Leave without saving?" / *Keep editing* / *Discard and leave*) on the in-app exit | `leaving with unsaved changes asks, keeps editing on cancel, and saves nothing` — the typed title survives Cancel, and the row count is unchanged either way |
+| project URL / image only for projects | `fieldsForStyle`: `projectLink` + `archiveYear` are project-only, `title_only` gets neither; see note 2 for the cover image | `shows the project URL and year only for a project…` walks all three styles in one session |
+| compact title-only flow | the same table: a quote/book entry is title + tags, nothing else | same test + `after-editor/cp6-editor-title-only-*` |
+| create / edit | `/admin/posts/new` and `/admin/posts/edit/...` share one component; create redirects to the new post's own address | lifecycle tests assert the URL after `Save as draft` |
+| publish / unpublish | PATCH via `adminApi.togglePublish`, independent of saving the text | lifecycle tests: publish → reload → `Live` → unpublish → reload → `Draft` |
+| save/publish failures visible, upload progress visible | `Notice assertive` with the server's message + "Nothing was saved…"; the Upload buttons use `AdminButton loading` | `a failed save says so and keeps every field`, `a failed cover upload reports it and leaves the form alone` |
+| preserve every field + style validation | draft carries title/description/content/excerpt/coverImage/tags/projectLink/archiveYear; `buildPostPayload` is style-agnostic so a hidden field never blanks a stored column; the baseline's three style rules are reproduced verbatim in `validatePostDraft` | 25 unit tests in `tests/unit/admin-post-editor.test.ts`, including the exact baseline sentences |
+
+Checkpoint 6's evidence sentence — "a browser test that creates → edits → publishes → unpublishes →
+reloads → deletes a post of each display style against a re-seeded DB with row counts asserted
+before and after" — is `tests/e2e/admin-post-editor.spec.ts`, parameterised over
+`engineering` (BLOG), `projects` (PROJECT) and `quotes` (TITLE_ONLY), with the count read back from
+`GET /api/admin/posts` before, +1 after the create, still +1 across the publish round trip, and
+back to the original after the delete. Titles carry a per-run id so a rerun cannot collide with a
+row a crashed run left behind, and a `finally` deletes at whatever address the editor ended on.
+
+Three measurements worth recording, all found by running the built tree:
+
+1. **`position: sticky; bottom: 0` does not work anywhere in this app's admin.** `src/app/globals.css:14`
+   gives `body` `overflow: hidden auto`, which makes the body the scroll container, so a bottom-stuck
+   bar sits at its natural position below the fold and never moves (measured `y = 2699` at 375×844).
+   The editor's bar is therefore `position: fixed`. Consequence recorded but not yet fixed:
+   `profileManager.tsx:340` still uses the `sticky` form, so the profile screen's save area is
+   "at the bottom of the form", not "always on screen". Follow-up, and the reason the profile
+   screenshots in `after-screens/` show the bar mid-page.
+2. **Renaming a post moves its address.** The PUT route runs `generateSlug` on the title, so after a
+   title edit the old URL is a `Post not found`. `PostEditor` follows it with `router.replace`; that
+   navigation remounts the page and refetches, so the transient "Your changes are saved." notice is
+   only emitted when the address did not change (the reloaded editor states its own saved line, and
+   the heading carries the new title). The lifecycle test asserts the URL before it reloads — the
+   first version of the test raced this and read a 404.
+3. **The preview cannot touch the emitted markup.** `markdownToHtml` bakes Tailwind utilities
+   (`text-neutral-300`, `bg-[#1a1a1a]`, `text-white`) into the stored HTML and that same HTML is what
+   the public article page serves, so re-theming happens in CSS: `.admin-md-preview` rules in
+   `admin.css` are deliberately unlayered, which is what lets them beat layered utilities
+   (§4.1 cascade note, now used on purpose). `after-editor/cp6-editor-preview-1440-light.png` is the
+   proof: the old `prose prose-invert` panel painted near-white text on the light background.
+
+Interpretation recorded, because the plan says two things at once: "show project URL **and image**
+fields only for project posts" (plan:41) versus "preserve every existing post field"
+(checkpoint 6). Project *link* and *archive year* are project-only as specified; the cover image
+stays available to a writing as well, because `src/components/public/PostContent.tsx:36` renders
+`post.coverImage` as the article cover and hiding the field would strand a published capability.
+A title-only post gets neither, which is unambiguous in both readings.
+
+Verification on the built tree: `npm run build` exit 0 (41 route lines in the output; `/admin/posts/new`
+prerendered static, `/admin/posts/edit/[subsectionSlug]/[postSlug]` server-rendered on demand),
+`npx tsc --noEmit` exit 0, `npx vitest run` **99/99** (11 files), `npx playwright test` **56/56**, `npx eslint .`
+**34 errors / 20 warnings** against the 48/24 baseline with **0 problems on every file this
+checkpoint touched**, `src/app/globals.css` and `src/components/public/**` byte-identical, and the
+isolated database back at 17 posts / 4 tags / 7 subsections. Hard-coded colour in
+`src/components/admin/**` + `src/app/admin/**`: 147 literals in 8 files → **29 in 5 files** — 21 of
+those are the two unconverted auth screens and 8 are dead legacy files
+(`postCard`/`filterBar`/`blogPost`) that nothing imports; the posts/editor path is at zero.
+
+Evidence: `after-editor/` — 22 PNGs (create-project, create-title-only, edit-writing, preview ×
+1440/375 × dark/light; the fixed-bar "fold" shots × 4; the leave dialog × 1440 × dark/light) with
+`capture-notes.txt` recording overflow, `h1` text and byte size per file. Nothing in the capture
+script writes to the database. Logs: `/tmp/cora/evidence/admin-run-iter7/`.
+
+Still open after this section, for checkpoint 6: the two auth screens (`LoginPage.tsx`,
+`SignUpPage.tsx`) keep their legacy card, and `FullScreenLoader` keeps its own hexes; both are
+shell-surface work rather than editor work and are listed in §7.
+
 
 
 ### Colour

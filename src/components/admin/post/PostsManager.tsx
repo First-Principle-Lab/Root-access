@@ -1,34 +1,20 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { MagnifyingGlassIcon, PlusIcon } from '@phosphor-icons/react';
 import { adminApi, requestFailureMessage } from '@/src/lib/api';
 import { buildPostListPageItems, isPostFilterActive, type PostListRequest } from '@/src/lib/postFilters';
-import type { Post, PostListItem, PostListResponse, TopCategory } from '@/src/types';
-import { AdminButton } from '@/src/components/ui/admin-button';
+import type { PostListItem, PostListResponse, TopCategory } from '@/src/types';
+import { AdminButton, adminButtonClass } from '@/src/components/ui/admin-button';
 import { AdminField, AdminInput, AdminSelect } from '@/src/components/ui/admin-field';
 import { AdminFilterBar } from '@/src/components/ui/admin-filter-bar';
 import { AdminEmptyState, AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-state';
 import { ConfirmDialog } from '@/src/components/ui/confirm-dialog';
 import { Notice } from '@/src/components/ui/notice';
 import { PageHeader } from '@/src/components/ui/page-header';
-import { PostForm } from './postForm';
+import { NEW_POST_PATH } from '@/src/lib/postEditor';
 import { PostListItemRow } from './postListItem';
-import { PostEditModal } from './PostEditModal';
-
-const INITIAL_FORM_DATA = {
-  title: '',
-  description: '',
-  content: '',
-  excerpt: '',
-  coverImage: '',
-  published: false,
-  tags: '',
-  projectLink: '',
-  archiveYear: null as number | null,
-};
-
-type DisplayStyleInput = 'blog' | 'project' | 'title_only';
 
 /** What the filter row controls. `page` resets to 1 whenever anything else changes. */
 interface PostFilterState {
@@ -77,33 +63,11 @@ export function PostsManager() {
      impure (react-hooks/purity) and per-row would give every row a different timestamp. */
   const [listedAt, setListedAt] = useState<number | null>(null);
 
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
-  const [formError, setFormError] = useState('');
-
-  const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PostListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [busySlug, setBusySlug] = useState('');
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
-
-  /* A row that is open in the editor has to be refetched by hand: the list response deliberately
-     omits `content` (a page of markdown bodies is not something a list should ship). */
-  const openEditor = async (post: PostListItem) => {
-    setActionError('');
-    setBusySlug(post.slug);
-    try {
-      const res = (await adminApi.getPost(post.subsection.slug, post.slug)) as { post: Post };
-      setEditingPost(res.post);
-    } catch (err) {
-      setActionError(
-        `${post.title} could not be opened for editing. ${requestFailureMessage(err, 'The request failed.')}`,
-      );
-    } finally {
-      setBusySlug('');
-    }
-  };
 
   useEffect(() => {
     let active = true;
@@ -127,9 +91,8 @@ export function PostsManager() {
     };
   }, []);
 
-  /* The sections tree is what the subsection select and the create form need; the posts
-     themselves come from the single list endpoint above. */
-  const subsections = useMemo(() => sections.flatMap((section) => section.subsections ?? []), [sections]);
+  /* The sections tree only fills the subsection filter below (grouped by section); the posts
+     themselves come from the single list endpoint. */
 
   // Only the committed filters decide the request, and the object identity changes with them.
   const request = useMemo<PostListRequest>(
@@ -179,59 +142,7 @@ export function PostsManager() {
   const filtersActive = isPostFilterActive(filters);
   const pageItems = buildPostListPageItems(pageInfo.page, pageInfo.totalPages);
 
-  const getSubsectionDisplayStyle = (subsectionSlug: string): DisplayStyleInput => {
-    const displayStyleMap: Record<string, DisplayStyleInput> = {
-      BLOG: 'blog',
-      PROJECT: 'project',
-      TITLE_ONLY: 'title_only',
-    };
-    const subsection = subsections.find((sub) => sub.slug === subsectionSlug);
-    return displayStyleMap[subsection?.displayStyle ?? 'BLOG'] ?? 'blog';
-  };
-
   const reloadList = () => setReloadToken((token) => token + 1);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError('');
-
-    if (!filters.subsection) {
-      setFormError('Choose which subsection this post belongs to.');
-      return;
-    }
-
-    const displayStyle = getSubsectionDisplayStyle(filters.subsection);
-
-    /* Style-specific validation is preserved from the baseline: a project needs its link, a
-       writing post needs a body, and everything except a title-only entry needs a summary. */
-    if (displayStyle === 'project' && !formData.projectLink) {
-      setFormError('A project post needs its project link.');
-      return;
-    }
-    if (displayStyle === 'blog' && !formData.content) {
-      setFormError('A writing post needs content in the editor.');
-      return;
-    }
-    if (displayStyle !== 'title_only' && !formData.description) {
-      setFormError('This subsection type needs a description.');
-      return;
-    }
-
-    try {
-      const tags = formData.tags.split(',').map((t) => t.trim()).filter(Boolean);
-      await adminApi.createPost(filters.subsection, {
-        ...formData,
-        description: displayStyle === 'title_only' ? '' : formData.description,
-        tags,
-      });
-      setFormData(INITIAL_FORM_DATA);
-      setShowForm(false);
-      setNotice('The post was created.');
-      reloadList();
-    } catch (err) {
-      setFormError(requestFailureMessage(err, 'The post was not created. Nothing was saved.'));
-    }
-  };
 
   const handleTogglePublish = async (post: PostListItem) => {
     setActionError('');
@@ -276,13 +187,6 @@ export function PostsManager() {
     }
   };
 
-  const handleCancelForm = () => {
-    setShowForm(false);
-    setFormData(INITIAL_FORM_DATA);
-    setFormError('');
-  };
-
-  const currentDisplayStyle = getSubsectionDisplayStyle(filters.subsection);
   const listBody = () => {
     if (loading) return <AdminLoadingState label="Loading posts" />;
     if (loadError) {
@@ -319,10 +223,10 @@ export function PostsManager() {
           description="Nothing is published yet. The first post can be written here."
           title="No posts yet"
           action={
-            <AdminButton onClick={() => setShowForm(true)} size="sm" variant="primary">
+            <Link className={adminButtonClass({ size: 'sm', variant: 'primary' })} href={NEW_POST_PATH}>
               <PlusIcon aria-hidden="true" className="size-4" />
               New post
-            </AdminButton>
+            </Link>
           }
         />
       );
@@ -342,7 +246,6 @@ export function PostsManager() {
               setNotice('');
               setPendingDelete(post);
             }}
-            onEdit={() => void openEditor(post)}
             onTogglePublish={() => void handleTogglePublish(post)}
             now={listedAt}
             post={post}
@@ -356,13 +259,12 @@ export function PostsManager() {
     <div>
       <PageHeader
         actions={
-          <AdminButton
-            onClick={() => (showForm ? handleCancelForm() : setShowForm(true))}
-            variant="primary"
-          >
+          /* Create is the editor page too, so there is one writing surface instead of the
+             baseline's inline form plus modal. */
+          <Link className={adminButtonClass({ variant: 'primary' })} href={NEW_POST_PATH}>
             <PlusIcon aria-hidden="true" className="size-4" />
-            {showForm ? 'Cancel' : 'New post'}
-          </AdminButton>
+            New post
+          </Link>
         }
         description="Every post across the site, newest edited first. Nothing here is visible to readers until you publish it."
         title="Posts"
@@ -448,21 +350,6 @@ export function PostsManager() {
         </AdminField>
       </AdminFilterBar>
 
-      {/* Post Form */}
-      {showForm && (
-        <PostForm
-          displayStyle={currentDisplayStyle}
-          error={formError}
-          formData={formData}
-          onCancel={handleCancelForm}
-          onChange={setFormData}
-          onSubmit={handleSubmit}
-          onSubsectionChange={(slug: string) => changeFilters({ subsection: slug })}
-          selectedSubsection={filters.subsection}
-          subsections={subsections}
-        />
-      )}
-
       {/* Posts List */}
       {listBody()}
 
@@ -532,14 +419,6 @@ export function PostsManager() {
         />
       )}
 
-      {/* Edit Modal */}
-      {editingPost && (
-        <PostEditModal
-          onClose={() => setEditingPost(null)}
-          onSave={reloadList}
-          post={editingPost}
-        />
-      )}
     </div>
   );
 }

@@ -181,6 +181,36 @@ html.dark body:has(.admin-shell) {
   body:has(.admin-shell) { --admin-gutter: 16px; --admin-panel-pad: 16px; }
 }
 
+/* Markdown preview in the post editor. `markdownToHtml` (src/lib/markdown.ts) emits the same
+   class-bearing HTML the published article page serves, and that markup may not change, so the
+   preview is re-coloured here instead: these rules are unlayered, which is what makes them beat
+   utilities such as `text-neutral-300` and `bg-[#1a1a1a]` inside the generated fragment. */
+.admin-shell .admin-md-preview { color: var(--admin-text); }
+.admin-shell .admin-md-preview :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--admin-heading);
+  font-weight: 620;
+  letter-spacing: var(--admin-tracking-title);
+  line-height: var(--admin-leading-tight);
+}
+.admin-shell .admin-md-preview :is(p, li, td, th) { color: var(--admin-text); }
+.admin-shell .admin-md-preview a {
+  color: var(--admin-info);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.admin-shell .admin-md-preview :is(strong, em, del) { color: var(--admin-heading); }
+.admin-shell .admin-md-preview :is(pre, code) {
+  background: var(--admin-surface-2);
+  color: var(--admin-text);
+}
+.admin-shell .admin-md-preview pre { border: var(--admin-input-border); }
+.admin-shell .admin-md-preview :is(hr, td, th) { border-color: var(--admin-border); }
+.admin-shell .admin-md-preview blockquote {
+  border-left-color: var(--admin-border-strong);
+  color: var(--admin-muted);
+}
+.admin-shell .admin-md-preview .admin-md-empty { color: var(--admin-subtle); }
+
 @media (prefers-reduced-motion: reduce) {
   .admin-shell *, .admin-shell *::before, .admin-shell *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }

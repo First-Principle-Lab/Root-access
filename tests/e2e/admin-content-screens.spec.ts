@@ -135,7 +135,7 @@ test.describe('content screens - headings, primary actions and seeded data', () 
 
     await page.goto('/admin/posts');
     await expect(pageTitle(page, 'Posts')).toBeVisible();
-    await expect(adminMain(page).getByRole('button', { name: 'New post' })).toBeVisible();
+    await expect(adminMain(page).getByRole('link', { name: /New post/ })).toBeVisible();
     await expect(adminMain(page).getByRole('search')).toBeVisible();
     for (const label of ['Search', 'Status', 'Subsection', 'Order']) {
       await expect(page.getByLabel(label)).toBeVisible();
@@ -145,7 +145,7 @@ test.describe('content screens - headings, primary actions and seeded data', () 
     await expect(adminMain(page).getByText(`${total} posts`)).toBeVisible();
     const firstRow = adminMain(page).locator('[data-slot="post-row"]').first();
     await expect(firstRow).toContainText('/');
-    await expect(firstRow.getByRole('button', { name: /^Edit / })).toBeVisible();
+    await expect(firstRow.getByRole('link', { name: /^Edit / })).toBeVisible();
 
     // The four stat cards and the green "Live" button are gone from the dashboard; the posts
     // screen must not reintroduce a fake metric either, so the count shown is the endpoint total.
