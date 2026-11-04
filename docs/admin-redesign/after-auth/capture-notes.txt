@@ -1,0 +1,26 @@
+After-state screenshots of /admin/login, the seventh screen the plan audits in
+docs/admin-redesign-plan.md ("Start from ... /admin/login") and the last one that still has
+pre-redesign markup. Captured on the final branch state against the isolated
+rootaccess_admin_dev database, dark and light, with the next-themes storageKey `site-theme`
+set before navigation.
+
+WHAT THIS SET EVIDENCES (README 4.10, acceptance row "Regression" and the named exception in
+section 7): the auth screen still works and still renders identically to the baseline capture,
+and it is still the one admin route outside `.admin-shell`, so it does not follow the theme.
+
+after-auth/after-login-1440x900-dark.png  1440x900  html.dark   body=rgb(10, 10, 10)  h1="Admin Login"  overflow=0  bytes=16173
+after-auth/after-login-375x844-dark.png   375x844   html.dark   body=rgb(10, 10, 10)  h1="Admin Login"  overflow=0  bytes=11409
+after-auth/after-login-1440x900-light.png 1440x900  html.light  body=rgb(10, 10, 10)  h1="Admin Login"  overflow=0  bytes=16173
+after-auth/after-login-375x844-light.png  375x844   html.light  body=rgb(10, 10, 10)  h1="Admin Login"  overflow=0  bytes=11409
+
+The dark and light pairs are byte-identical. That is the finding, not a capture bug: the token
+layer is scoped to `body:has(.admin-shell)` (src/app/admin/admin.css) and LoginPage.tsx renders
+its own hard-coded `bg-[#0a0a0a]` card outside that shell, exactly as it did at the baseline
+(docs/admin-redesign/before/, README 1 "Finding: the admin does not respond to the theme at
+all"). Every screen inside the shell does change with the theme; see after-shell/,
+after-screens/, after-editor/ and the contrast/focus tests in tests/e2e/admin-acceptance.spec.ts.
+
+No /admin/signup screenshots: with an admin account present the signup screen redirects to
+/admin/login, so a capture of that route is a second copy of the login card. Route-level proof
+is in tests/e2e/admin-acceptance.spec.ts ("the signup check still answers":
+GET /api/admin/check-signup -> { allowSignup: false }).

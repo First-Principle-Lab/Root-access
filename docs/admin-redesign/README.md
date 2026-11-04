@@ -958,6 +958,94 @@ edits are the hard-coded hrefs replaced by `resolveGithubUrl` at
 `src/components/public/SocialLinks.tsx:18` and `src/components/public/Sidebar.tsx:244`. No public CSS
 changed, no public route changed, and no `.site-shell` selector changed.
 
+### 4.10 Acceptance run record (checkpoint 10)
+
+Every row of the acceptance table in `docs/admin-redesign-plan.md:53-62`, executed on this tree in
+one sitting: one `npm run build`, one `next start -p 3099` booted from that build, and the isolated
+`rootaccess_admin_dev` database re-seeded with `/tmp/cora/seed.sql` before the browser run. Logs:
+`/tmp/cora/evidence/admin-run-iter11/`.
+
+#### The commands
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `npm run build` | exit 0, "Compiled successfully", 39 static pages | `admin-run-iter11/build.log` |
+| `npx tsc --noEmit` | exit 0, no output | `admin-run-iter11/tsc.log` |
+| `npx vitest run` | exit 0, 118 passed / 13 files | `admin-run-iter11/vitest.log` |
+| `npx playwright test` | exit 0, 83 passed in 2.9m | `admin-run-iter11/playwright-full.log` |
+| `npx eslint .` | 34 errors / 20 warnings (baseline 48 / 24) | `admin-run-iter11/eslint-full.json`, `eslint-summary.txt` |
+| `npx prisma migrate status` | "15 migrations found ... Database schema is up to date!" | `admin-run-iter11/migrate-status.log` |
+
+Browser specs per file: `admin-shell` 17, `admin-content-screens` 15, **`admin-acceptance` 12 (new
+this iteration)**, `admin-post-editor` 10, `admin-failure-paths` 9, `admin-post-list` 8,
+`admin-controls` 6, `github-link` 6.
+
+#### Each acceptance row, and what proves it
+
+| Acceptance row | Proof on this tree | Result |
+| --- | --- | --- |
+| **Build and static checks** - build and TypeScript pass, ESLint passes on touched files, existing unrelated failures reported separately | `npm run build` and `npx tsc --noEmit` above. Per touched file: the two files this iteration touched (`tests/e2e/admin-acceptance.spec.ts`, `tests/e2e/helpers/adminAuth.ts`) are 0/0, and every other touched file that still reports a problem is at its exact recorded baseline count (`src/lib/api.ts` 10/0, `src/app/api/admin/profile/route.ts` 2/0, `src/components/public/Sidebar.tsx` 1/2, `src/app/api/public/layout/route.ts` 0/1, `src/app/api/admin/stats/route.ts` 0/1, `src/components/public/Sidebar/SidebarServer.tsx` 1/0, `src/components/admin/post/postCard.tsx` 0/1 - compared against `/tmp/cora/baseline/eslint-newbase.json` in `eslint-summary.txt`). The 24 other offending files are untouched code, listed in README 4.9 | PASS |
+| **Theme** - choice persists across refresh and public/admin navigation, text/borders/controls/editor preview readable in both modes, no flash | `tests/e2e/admin-shell.spec.ts`: "persists across reload and public <-> admin navigation with no wrong-theme flash", "applies the stored preference before first paint (no flash)", "theme switching honours prefers-reduced-motion"; `tests/e2e/admin-acceptance.spec.ts`: "the admin token pairs keep WCAG AA contrast in both themes" (12 live token pairs x 2 themes, every pair >= 4.5:1). Readability is the screenshot set: `after-shell/`, `after-screens/`, `after-controls/`, `after-editor/` (its markdown preview pane is the `.admin-md-preview` block of `src/app/admin/admin.css`), `after-github-link/`, each captured dark and light | PASS for the shell, all six content screens, the editor and the markdown preview. See NOT PROVEN for `/admin/login` and `/admin/signup` |
+| **Responsive layout** - 375/768/1440 with no horizontal overflow and usable navigation, forms, lists and editor actions | `tests/e2e/admin-acceptance.spec.ts`: "every screen keeps its title, its controls and zero horizontal overflow at 1440, 768 and 375" (6 screens + the editor x 3 widths, `scrollWidth - clientWidth === 0` each time, heading and shell controls asserted). Plus `admin-shell.spec.ts` "no horizontal overflow at 1440, 768 and 375", the six 375px per-screen tests in `admin-content-screens.spec.ts`, the 375px list test, the 375px editor test, and the 44px-target tests in `admin-controls.spec.ts` and `admin-shell.spec.ts` | PASS |
+| **Accessibility** - keyboard reaches and operates nav/dialogs/forms/filters/editor actions, focus visible, dialogs trap and restore, icons named, errors associated with fields, contrast and reduced motion checked | Keyboard: skip-link test and the mobile drawer "opens and closes with the keyboard" test (`admin-shell.spec.ts`). Focus visible: `admin-acceptance.spec.ts` "keyboard focus is visible on the shell, list and editor controls" - 6 Tab stops on three screens, each with a computed `outline-width >= 2px`. Dialogs: `admin-controls.spec.ts` "names the item and the consequence, traps focus, and changes nothing on cancel" (Tab/Shift+Tab containment plus focus restored to the row control). Names: `admin-acceptance.spec.ts` "every visible control on every screen has an accessible name" over 7 routes x every visible link/button/input/select/textarea in `main#admin-main`, the top bar and the sidebar. Field errors: the `AdminField` context gives every control `aria-invalid` + `aria-describedby`, asserted in `admin-controls.spec.ts` ("...puts the error on the field"), `admin-post-editor.spec.ts` ("style-specific validation blocks the save and names the field") and `admin-failure-paths.spec.ts`. Contrast: the token-pair test above. Reduced motion: the whole suite runs under `reducedMotion: 'reduce'` (`playwright.config.ts`) and `src/app/admin/admin.css` collapses the motion tokens under `prefers-reduced-motion` | PASS with one limit: no assistive technology exists in this environment, so screen-reader output is asserted through ARIA semantics and computed properties, never by listening to a real reader |
+| **Content lifecycle** - create, edit, preview, publish, unpublish, filter, delete each supported post type on isolated data, refresh after every saved action, public pages reflect only published content | `tests/e2e/admin-post-editor.spec.ts` runs create -> edit -> publish -> unpublish -> reload -> delete for a BLOG, a PROJECT and a TITLE_ONLY post with row counts read back from `/api/admin/posts` before and after, plus "the preview pane renders the same markdown the published page serves". `tests/e2e/admin-post-list.spec.ts` covers search/status/subsection/order filters and paging server-side, and "publishing and unpublishing a draft persists across a reload". `tests/e2e/admin-acceptance.spec.ts` adds the public half: "home and the archives exclude drafts and the hidden section and subsection" (draft titles absent from `/` and `/engineering`, draft and hidden-subsection addresses 404, published article 200), "the project, publication, book and quote lists keep their published content", and "publishing a draft from the posts screen puts it on the public site, and unpublishing takes it off", which publishes a real seeded draft through the posts screen, reloads the admin row, and polls the public archive until it lists - then unlists - that post | PASS |
+| **Structure and profile** - create/edit/hide sections and subsections, create/delete tags, update bio, social URLs including GitHub, image and resume, public links and content still correct | `tests/e2e/admin-acceptance.spec.ts`: "a section is created, hidden, shown and deleted, and the public structure follows" (the uncached `/api/public/layout` read follows every step), "hiding a subsection drops it from the public structure and showing it puts it back", "a resume link saves, survives a reload, reaches the public profile read and is restored". Tags: `admin-controls.spec.ts` creates and deletes a tag through the real endpoint and refuses a delete that fails. Profile: `admin-content-screens.spec.ts` "a saved bio survives a reload and a cleared link stays cleared", and `github-link.spec.ts` (6 tests) for the social group, the invalid URL, the edited value reaching the public read, and the empty-value fallback. Public links: `github-link.spec.ts` + the acceptance public-content tests above | PASS except the profile **picture success path**, which is NOT PROVEN below |
+| **Failure paths** - failed list, save, upload and delete requests show an actionable error and keep unsaved input; cancelling a destructive action changes nothing | `tests/e2e/admin-failure-paths.spec.ts` (9 tests: duplicate section refused 409, section delete transport failure, delete cancel sends zero requests, duplicate subsection refused, subsection holding posts refuses 409, subsection list failure with retry, profile picture upload failure against the real Cloudinary-less 500, post publish failure, post delete failure - each reading its collection back from the endpoint the screen uses, and again after a reload). Plus `admin-post-list.spec.ts` "a failed list is an error with a retry, never an empty list" and "canceling the delete confirmation changes nothing", `admin-post-editor.spec.ts` "a failed save says so and keeps every field", "a failed cover upload reports it and leaves the form alone" and "leaving with unsaved changes asks, keeps editing on cancel, and saves nothing", and `admin-content-screens.spec.ts` "a failed dashboard request is reported instead of rendering zeros" and "a failed profile save keeps what was typed" | PASS |
+| **Regression** - login/logout and route protection still work, existing public home, archives, articles, project links, social links and theme toggle behave as before | `tests/e2e/admin-acceptance.spec.ts`: "the admin is unreachable without a session, and the form signs in and out" (three protected routes bounce to `/admin/login`, the real form sets `auth-token`, `/api/admin/stats` answers 200, logout clears the cookie and protection returns), "an unauthenticated admin API request is a 401, and the signup check still answers" (five admin endpoints 401, `/api/admin/check-signup` 200 with `allowSignup: false`), the public-content tests above for home/archives/articles/project links, and `github-link.spec.ts` for the public social icon. The theme toggle's public behaviour is `admin-shell.spec.ts` (public <-> admin in one context). Structural regression: `git diff` for `src/app/globals.css`, `src/middleware.ts`, `src/lib/auth.ts` and `.site-shell` selectors is empty (README 4.9) | PASS for the routes and flows above; the full exit gate (public home/archive/article before-after screenshots versus the recorded baseline) runs after checkpoints 1-10 and is recorded separately |
+
+#### Screenshot inventory on this tree
+
+`before/` 28 (the seven named screens x 2 widths x 2 themes, plus states) - `mockups/` 10 -
+`after-shell/` 26 - `after-controls/` 24 - `after-screens/` 48 (all six content screens x 2 widths
+x 2 themes x their states) - `after-editor/` 22 - `after-github-link/` 12 -
+`after-auth/` 4 (new: `/admin/login` at both widths and both themes, with
+`capture-notes.txt` recording that its dark and light files are byte-identical, which is the
+finding, not a capture bug).
+
+#### NOT PROVEN (never claimed)
+
+- **Image upload success** (profile picture and post cover): there are no Cloudinary credentials in
+  this environment, so the success path cannot be evidenced at all. Its failure path is proven
+  twice, and both times the form keeps what was typed.
+- **`/admin/login` and `/admin/signup` in the light theme**: they still render their own
+  `bg-[#0a0a0a]` card outside `.admin-shell` (the pre-existing exception carried in section 7), so
+  `after-auth/`'s dark and light pairs are identical. Converting them is a styling pass that no
+  acceptance row depends on; it is not done and not claimed.
+- **Screen-reader output**: no AT is installed, so "screen reader support" is evidenced by
+  `aria-current`, `aria-expanded`, `aria-modal`, accessible names and focus restoration, not by
+  listening to a reader.
+- **Public DOM inside the revalidation window**: the public pages are ISR with `revalidate = 60` and
+  `stale-while-revalidate = 31535940`, and that is pre-existing behaviour this branch does not
+  change. Measured directly after a withdraw: the first request to the withdrawn address returned the
+  previously rendered article with status 200, and the next four returned the 404
+  (`/tmp/cora/evidence/admin-run-iter11/probe-1.html` ... `probe-5.html`, `plain-1.html` ...
+  `plain-3.html`). So a public address can keep serving a post for one stale response after it is
+  unpublished, and the acceptance tests poll for convergence instead of asserting one response (up to
+  150s).
+  The uncached `/api/public/layout` read is used wherever an immediate answer is needed.
+- **A large post list**: the seed holds 17 posts (2 admin pages at 10/page). The plan's "large post
+  list" review note is therefore only exercised at two pages, not at, say, 500 posts.
+
+#### Rerunning it
+
+```bash
+export HOME=/root PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+npm run build
+setsid nohup npx next start -p 3099 > /tmp/cora/server.log 2>&1 < /dev/null &
+PGPASSWORD=rootaccess psql -h 127.0.0.1 -U rootaccess -d rootaccess_admin_dev -f /tmp/cora/seed.sql
+npx vitest run && npx playwright test
+```
+
+`npm test` runs the vitest layer; `npm run test:e2e` runs the browser layer against an already
+started server. The acceptance specs mutate the isolated database only to restore it
+(`finally` blocks re-show `essays`, re-delete a stray section, and write the profile resume link
+back), and the seeded counts are read from the endpoints rather than hard-coded.
+
+### 4.11 Deliverable -> changed files (the PR summary)
+
+The seven deliverables of `docs/admin-redesign-plan.md:11-19`, mapped to the files that carry them,
+is in [`pr-summary.md`](pr-summary.md); it is the body of the pull request against `dev`.
+
 ## 5. Where admin density needs more width and stronger action hierarchy
 
 - **Width.** The public 656px column is right for reading and wrong for editing: a post
