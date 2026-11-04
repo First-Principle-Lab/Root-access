@@ -998,22 +998,14 @@ this iteration)**, `admin-post-editor` 10, `admin-failure-paths` 9, `admin-post-
 `before/` 28 (the seven named screens x 2 widths x 2 themes, plus states) - `mockups/` 10 -
 `after-shell/` 26 - `after-controls/` 24 - `after-screens/` 48 (all six content screens x 2 widths
 x 2 themes x their states) - `after-editor/` 22 - `after-github-link/` 12 -
-`after-auth/` 4 (new: `/admin/login` at both widths and both themes, with
-`capture-notes.txt` recording that its dark and light files are byte-identical, which is the
-finding, not a capture bug).
+`after-auth/` 8 (login and signup at both widths and both themes; signup eligibility
+was mocked for capture because an admin account already exists).
 
 #### NOT PROVEN (never claimed)
 
 - **Image upload success** (profile picture and post cover): there are no Cloudinary credentials in
   this environment, so the success path cannot be evidenced at all. Its failure path is proven
   twice, and both times the form keeps what was typed.
-- **The `/admin/login` and `/admin/signup` card in the light theme**: after the merge with `dev`
-  these routes are inside the single `.admin-shell` (README 4.12), so the token scope reaches them -
-  the shell itself now paints `rgb(5, 5, 5)` / `rgb(255, 255, 255)` behind the card and the card's
-  text renders in the admin's Inter. The card keeps its own hard-coded `bg-[#0a0a0a]` and
-  `text-white`, and it covers the viewport, so `after-auth/`'s dark and light pairs are still
-  byte-identical (15033 and 10499 bytes). Re-colouring the card itself is a styling pass that no
-  acceptance row depends on; it is not done and not claimed.
 - **Screen-reader output**: no AT is installed, so "screen reader support" is evidenced by
   `aria-current`, `aria-expanded`, `aria-modal`, accessible names and focus restoration, not by
   listening to a reader.

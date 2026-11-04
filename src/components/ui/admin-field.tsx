@@ -27,7 +27,7 @@ export function useAdminFieldProps<T extends Record<string, unknown>>(props: T):
 } {
   const field = React.useContext(AdminFieldContext);
   if (!field) return props;
-  const describedBy = [field.hintId, field.errorId].filter(Boolean).join(' ');
+  const describedBy = [props['aria-describedby'], field.hintId, field.errorId].filter(Boolean).join(' ');
   return {
     ...props,
     id: (props.id as string | undefined) ?? field.controlId,

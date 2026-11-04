@@ -1,30 +1,15 @@
-After-state screenshots of /admin/login, the seventh screen the plan audits in
-docs/admin-redesign-plan.md ("Start from ... /admin/login"). Captured on the MERGED tree (this
-branch + origin/dev@5cabc81, see README 4.12) against the isolated rootaccess_admin_dev database,
-dark and light, with the next-themes storageKey `site-theme` set before navigation.
+Auth screens after the PR review correction. Captured from a production build at
+1440 x 900 and 375 x 844, in dark and light modes. The `site-theme` preference was
+set before navigation. Signup eligibility was mocked to `allowSignup: true` for
+screenshots because the connected database already has an admin account; no account
+was created.
 
-WHAT THIS SET EVIDENCES (README 4.12, correction checkpoint C11 item 3): /admin/login is now inside
-the token scope. The single `.admin-shell` element is rendered by src/app/admin/layout.tsx (the
-route-level layout, kept from dev) rather than by AdminLayout, which this route never rendered, so
-the auth screen inherits the admin tokens: exactly one shell node, `--admin-bg` resolves, the shell
-paints rgb(5, 5, 5) in dark and rgb(255, 255, 255) in light, and PR #1's pointer cursor applies to
-the submit button. Committed as tests/e2e/admin-shell-scope.spec.ts.
+Both routes use AdminAuthShell, AdminField, AdminInput, AdminButton and Notice.
+They share the admin tokens with the authenticated screens and expose the existing
+theme switcher and a link back to the public site. The light card is now light and
+the dark card is dark. No horizontal overflow was observed at either width.
 
-after-auth/after-login-1440x900-dark.png  1440x900  html.dark   shells=1  shellBg=rgb(5, 5, 5)   cardBg=rgb(10, 10, 10)  h1="Admin Login"  font=Inter  submitCursor=pointer  overflow=0  bytes=15033
-after-auth/after-login-375x844-dark.png   375x844   html.dark   shells=1  shellBg=rgb(5, 5, 5)   cardBg=rgb(10, 10, 10)  h1="Admin Login"  font=Inter  submitCursor=pointer  overflow=0  bytes=10499
-after-auth/after-login-1440x900-light.png 1440x900  html.light  shells=1  shellBg=rgb(255, 255, 255)  cardBg=rgb(10, 10, 10)  h1="Admin Login"  font=Inter  submitCursor=pointer  overflow=0  bytes=15033
-after-auth/after-login-375x844-light.png  375x844   html.light  shells=1  shellBg=rgb(255, 255, 255)  cardBg=rgb(10, 10, 10)  h1="Admin Login"  font=Inter  submitCursor=pointer  overflow=0  bytes=10499
-
-The dark and light pairs are still byte-identical, and that is still the finding rather than a
-capture bug: LoginPage.tsx paints its own hard-coded `bg-[#0a0a0a]` / `text-white` card and that
-card fills the viewport, so the card itself remains outside the colour tokens (README section 7
-carries the auth-screen conversion as a named, deliberate non-change). What the merge did change on
-this screen is measurable: against the pre-merge capture the pixels differ by 3760/1296000 (0.29%),
-entirely inside the card, because its text now inherits the admin's Inter instead of the body's
-`ui-sans-serif`, and the shell behind the card now follows the theme.
-
-No /admin/signup screenshots: with an admin account present the signup screen redirects to
-/admin/login, so a capture of that route is a second copy of the login card. Route-level proof is
-in tests/e2e/admin-shell-scope.spec.ts ("/admin/signup is scoped by the same shell even when it
-redirects to login") and tests/e2e/admin-acceptance.spec.ts ("the signup check still answers":
-GET /api/admin/check-signup -> { allowSignup: false }).
+Browser assertions are in tests/e2e/admin-auth-theme.spec.ts: both themes, both
+widths, control labels, error announcement, retained input after failed requests,
+and aria-describedby links to the error notice. The production build, TypeScript
+and focused lint checks pass on the updated tree.

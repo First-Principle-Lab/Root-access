@@ -161,21 +161,32 @@ answer for a hidden post, and a 0.29% font difference on `/admin/login`) are in 
 1. **No Cloudinary credentials in this environment.** The image-upload *success* path (profile
    picture, post cover) cannot be evidenced; the failure path is (visible actionable error, input
    retained, nothing stored) - `admin-failure-paths.spec.ts` and `admin-post-editor.spec.ts`.
-2. **The `/admin/login` and `/admin/signup` card is still pre-redesign styling.** Since the merge they
-   sit *inside* the single `.admin-shell` and so inherit its tokens (background, Inter, the pointer
-   cursor), but the card keeps hard-coded `bg-[#0a0a0a]` / `text-white` utilities that win over the
-   base layer and fill the viewport, so `after-auth/`'s dark and light files stay byte-identical -
-   which is the measurement, not a capture bug. No acceptance row depends on them.
-3. **No assistive technology is installed**, so screen-reader support is asserted through ARIA
+2. **No assistive technology is installed**, so screen-reader support is asserted through ARIA
    semantics, accessible names and focus restoration rather than by listening to a reader.
-4. **Public pages are ISR (`revalidate = 60`, `stale-while-revalidate = 31535940`) and that is
+3. **Public pages are ISR (`revalidate = 60`, `stale-while-revalidate = 31535940`) and that is
    pre-existing behaviour this branch does not change**: a just-saved change can take up to a minute
    to appear in the rendered public HTML, and - measured, see README 4.10 - a withdrawn post can keep
    serving one stale cached response before it 404s. Tests use the uncached `/api/public/layout` read
    where an immediate answer is required and poll the rendered page otherwise. Revalidation on
    publish (instead of a timed window) is out of scope here.
-5. Five files under `src/components/admin/post/` were already unreferenced at the branch base
+4. Five files under `src/components/admin/post/` were already unreferenced at the branch base
    (`postList`, `postCard`, `blogPost`, `titleOnlyItem`, `filterBar`) and still carry their baseline
    hexes; they are named in README 4.9 rather than silently deleted.
-6. Large-list behaviour is exercised at two pages of ten rows (the seed holds 17 posts), not at
+5. Large-list behaviour is exercised at two pages of ten rows (the seed holds 17 posts), not at
    hundreds.
+
+## Review follow-up
+
+- Converted `/admin/login` and `/admin/signup` to the same token-based design as the admin shell.
+  The shared auth frame includes the site link and theme control; fields, submit buttons, loading
+  and error states now use the admin primitives. `after-auth/` contains eight fresh captures.
+- Added `tests/e2e/admin-auth-theme.spec.ts`: two browser tests cover both themes, desktop and
+  mobile widths, failed requests, retained input, and error association. Both pass.
+- The `root-access` Vercel preview failed because its database lacked the additive `githubLink`
+  migration. Applied `npx prisma migrate deploy` to the connected Supabase database; migration
+  status and a fresh production build now pass.
+- Fresh TypeScript and focused lint checks pass. The previous worker's full 118-test Vitest and
+  90-test Playwright gate was on the isolated `rootaccess_admin_dev` database. That database and
+  its seed are unavailable in this review workspace, so the full gate was not rerun here; a
+  Vitest run against the connected database passed 97 unit/anonymous checks and failed 21
+  integration checks at test-account login, which is a fixture mismatch, not an app assertion.
