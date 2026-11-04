@@ -1,0 +1,22 @@
+cp6-editor-new-project-1440-dark.png  overflow=0 h1="New post" bytes=106000  Create: project link + archive year + cover image, no markdown pane, fixed save bar with two explicit submit actions
+cp6-editor-title-only-1440-dark.png  overflow=0 h1="New post" bytes=56959  Compact title-only flow: no description, no excerpt, no cover, no project fields
+cp6-editor-edit-writing-1440-dark.png  overflow=0 h1="Edit “How GNHF schedules long agent runs”" bytes=113309  Edit "How GNHF schedules long agent runs": placement, content, writing, cover, tags + persistent save area
+cp6-editor-edit-fold-1440-dark.png  viewport shot: fixed save/publish bar pinned to the bottom of the screen  bytes=50985
+cp6-editor-preview-1440-dark.png  overflow=0 h1="Edit “How GNHF schedules long agent runs”" bytes=49375  Explicit preview of the same markdownToHtml output the published page serves, re-coloured onto admin tokens (readable in this theme)
+cp6-editor-leave-dialog-1440-dark.png  overflow=0 h1="New post" bytes=57515  Leave-without-saving dialog: focus trapped, "Keep editing" is the Cancel default, save state reads "You have unsaved changes."
+cp6-editor-new-project-375-dark.png  overflow=0 h1="New post" bytes=82803  Create: project link + archive year + cover image, no markdown pane, fixed save bar with two explicit submit actions
+cp6-editor-title-only-375-dark.png  overflow=0 h1="New post" bytes=39626  Compact title-only flow: no description, no excerpt, no cover, no project fields
+cp6-editor-edit-writing-375-dark.png  overflow=0 h1="Edit “How GNHF schedules long agent runs”" bytes=98782  Edit "How GNHF schedules long agent runs": placement, content, writing, cover, tags + persistent save area
+cp6-editor-edit-fold-375-dark.png  viewport shot: fixed save/publish bar pinned to the bottom of the screen  bytes=32369
+cp6-editor-preview-375-dark.png  overflow=0 h1="Edit “How GNHF schedules long agent runs”" bytes=32424  Explicit preview of the same markdownToHtml output the published page serves, re-coloured onto admin tokens (readable in this theme)
+cp6-editor-new-project-1440-light.png  overflow=0 h1="New post" bytes=110257  Create: project link + archive year + cover image, no markdown pane, fixed save bar with two explicit submit actions
+cp6-editor-title-only-1440-light.png  overflow=0 h1="New post" bytes=57730  Compact title-only flow: no description, no excerpt, no cover, no project fields
+cp6-editor-edit-writing-1440-light.png  overflow=0 h1="Edit “How GNHF schedules long agent runs”" bytes=113616  Edit "How GNHF schedules long agent runs": placement, content, writing, cover, tags + persistent save area
+cp6-editor-edit-fold-1440-light.png  viewport shot: fixed save/publish bar pinned to the bottom of the screen  bytes=51526
+cp6-editor-preview-1440-light.png  overflow=0 h1="Edit “How GNHF schedules long agent runs”" bytes=50035  Explicit preview of the same markdownToHtml output the published page serves, re-coloured onto admin tokens (readable in this theme)
+cp6-editor-leave-dialog-1440-light.png  overflow=0 h1="New post" bytes=62912  Leave-without-saving dialog: focus trapped, "Keep editing" is the Cancel default, save state reads "You have unsaved changes."
+cp6-editor-new-project-375-light.png  overflow=0 h1="New post" bytes=86326  Create: project link + archive year + cover image, no markdown pane, fixed save bar with two explicit submit actions
+cp6-editor-title-only-375-light.png  overflow=0 h1="New post" bytes=40142  Compact title-only flow: no description, no excerpt, no cover, no project fields
+cp6-editor-edit-writing-375-light.png  overflow=0 h1="Edit “How GNHF schedules long agent runs”" bytes=98838  Edit "How GNHF schedules long agent runs": placement, content, writing, cover, tags + persistent save area
+cp6-editor-edit-fold-375-light.png  viewport shot: fixed save/publish bar pinned to the bottom of the screen  bytes=32774
+cp6-editor-preview-375-light.png  overflow=0 h1="Edit “How GNHF schedules long agent runs”" bytes=32960  Explicit preview of the same markdownToHtml output the published page serves, re-coloured onto admin tokens (readable in this theme)

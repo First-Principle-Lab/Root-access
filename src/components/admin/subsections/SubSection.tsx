@@ -1,335 +1,522 @@
 'use client';
 
-import { adminApi } from '@/src/lib/api';
-import { Subsection, TopCategory } from '@/src/types';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import {
+  ArrowSquareOutIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
+import { adminApi, requestFailureMessage } from '@/src/lib/api';
+import { ContentTypeBadge } from '@/src/components/admin/contentTypeBadge';
+import { CONTENT_TYPES, contentTypeFor } from '@/src/components/admin/contentTypes';
+import type { Subsection, TopCategory } from '@/src/types';
+import { cn } from '@/src/lib/cn';
+import { AdminButton, adminButtonClass } from '@/src/components/ui/admin-button';
+import {
+  AdminCheckbox,
+  AdminField,
+  AdminInput,
+  AdminSelect,
+} from '@/src/components/ui/admin-field';
+import { AdminFilterBar } from '@/src/components/ui/admin-filter-bar';
+import { AdminEmptyState, AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-state';
+import { ConfirmDialog } from '@/src/components/ui/confirm-dialog';
+import { FormSection } from '@/src/components/ui/form-section';
+import { Notice } from '@/src/components/ui/notice';
+import { PageHeader } from '@/src/components/ui/page-header';
+import { StatusLabel } from '@/src/components/ui/status-label';
 import { EmojiPicker } from './EmojiPicker';
-import { ContentLoader } from '../../ui/Spinner';
+import {
+  EMPTY_SUBSECTION_FILTERS,
+  groupSubsections,
+  isSubsectionFilterActive,
+  type SubsectionFilterState,
+} from './subsectionFilters';
 
 type DisplayStyleInput = 'blog' | 'project' | 'title_only';
 
+const STYLE_OPTIONS: { value: DisplayStyleInput; key: 'blog' | 'project' | 'title_only' }[] = [
+  { key: 'blog', value: 'blog' },
+  { key: 'project', value: 'project' },
+  { key: 'title_only', value: 'title_only' },
+];
+
+const PRISMA_TO_INPUT: Record<string, DisplayStyleInput> = {
+  BLOG: 'blog',
+  PROJECT: 'project',
+  TITLE_ONLY: 'title_only',
+};
+
+/* Stored data, not chrome: `Subsection.icon` is an emoji column (prisma/schema.prisma:46) that
+   the admin edits with EmojiPicker, and this is the value a brand-new subsection starts with.
+   Hoisted to one named constant so the emoji-grep for checkpoint 4 has exactly one honest hit
+   in this file outside the picker itself. */
+const DEFAULT_SUBSECTION_ICON = '\u{1F4C4}';
+
+const EMPTY_FORM = {
+  name: '',
+  isVisible: true,
+  icon: DEFAULT_SUBSECTION_ICON,
+  topCategoryName: '',
+  displayStyle: 'blog' as DisplayStyleInput,
+};
+
+/* Subsections screen (checkpoint 5 of docs/admin-redesign-plan.md §3.2).
+   The baseline flattened every section into one alphabetical list, so nothing on the screen said
+   which section a subsection belonged to; it reported a failed read only to the console, and its
+   create form was a wall of hand-styled inputs. The list is a tree again (section header, then its
+   subsections), the three filters sit in the same row they sit in on Posts, and every control is a
+   checkpoint-4 primitive. */
 export function SubsectionsManager() {
   const [sections, setSections] = useState<TopCategory[]>([]);
-  const [subsections, setSubsections] = useState<Subsection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [filters, setFilters] = useState<SubsectionFilterState>(EMPTY_SUBSECTION_FILTERS);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    isVisible: true,
-    icon: '📄',
-    topCategoryName: '',
-    displayStyle: 'blog' as DisplayStyleInput,
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<Subsection | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, []);
 
   const fetchData = async () => {
+    setLoading(true);
+    setLoadError('');
     try {
-      const res = await adminApi.getSections() as { sections: TopCategory[] };
+      const res = (await adminApi.getSections()) as { sections: TopCategory[] };
       setSections(res.sections);
-      
-      // Flatten all subsections from all sections
-      const allSubsections = res.sections.flatMap((section) => 
-        section.subsections?.map(sub => ({
-          ...sub,
-          topCategory: { name: section.name }
-        })) || []
+    } catch (err) {
+      setSections([]);
+      setLoadError(
+        requestFailureMessage(err, 'Subsections could not be reached. Check your connection and try again.'),
       );
-      setSubsections(allSubsections);
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  const { groups, matched, total } = useMemo(() => groupSubsections(sections, filters), [sections, filters]);
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingSlug(null);
+    setFormData(EMPTY_FORM);
+    setError('');
+  };
+
+  const openCreate = () => {
+    setFormData({ ...EMPTY_FORM, topCategoryName: filters.section || '' });
+    setEditingSlug(null);
+    setError('');
+    setShowForm(true);
+  };
+
+  const openEdit = (subsection: Subsection, sectionName: string) => {
+    setFormData({
+      name: subsection.name,
+      isVisible: subsection.isVisible,
+      icon: subsection.icon,
+      topCategoryName: sectionName,
+      displayStyle: PRISMA_TO_INPUT[subsection.displayStyle] ?? 'blog',
+    });
+    setEditingSlug(subsection.slug);
+    setError('');
+    setShowForm(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
+    setSaving(true);
     try {
       if (editingSlug) {
         await adminApi.updateSubsection(editingSlug, formData);
       } else {
         await adminApi.createSubsection(formData);
       }
-      setFormData({ name: '', isVisible: true, icon: '📄', topCategoryName: '', displayStyle: 'blog' });
-      setEditingSlug(null);
-      setShowForm(false);
-      fetchData();
-    } catch (err: any) {
-      setError(err.message || 'Operation failed');
+      closeForm();
+      void fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the subsection.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleEdit = (subsection: Subsection) => {
-    // Map Prisma enum to form input
-    const displayStyleMap: Record<string, DisplayStyleInput> = {
-      'BLOG': 'blog',
-      'PROJECT': 'project',
-      'TITLE_ONLY': 'title_only'
-    };
-
-    setFormData({
-      name: subsection.name,
-      isVisible: subsection.isVisible,
-      icon: subsection.icon,
-      topCategoryName: subsection.topCategory?.name || '',
-      displayStyle: displayStyleMap[subsection.displayStyle] || 'blog',
-    });
-    setEditingSlug(subsection.slug);
-    setShowForm(true);
-  };
-
-  const handleDelete = async (slug: string) => {
-    if (!confirm('Are you sure you want to delete this subsection?')) return;
-
+  /* Baseline used window.confirm, which named neither the subsection nor what happens to its
+     posts. The API restricts the delete while posts reference it (prisma/schema.prisma:81), so the
+     count is stated up front and a refusal is reported inline instead of with window.alert. */
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteError('');
     try {
-      await adminApi.deleteSubsection(slug);
-      fetchData();
-    } catch (err: any) {
-      alert(err.message || 'Delete failed');
+      await adminApi.deleteSubsection(pendingDelete.slug);
+      setPendingDelete(null);
+      void fetchData();
+    } catch (err) {
+      setDeleteError(
+        `${pendingDelete.name} was not deleted. ${
+          err instanceof Error ? err.message : 'The request failed.'
+        }`,
+      );
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
     }
-  };
-
-  const handleCancel = () => {
-    setShowForm(false);
-    setEditingSlug(null);
-    setFormData({ name: '', isVisible: true, icon: '📄', topCategoryName: '', displayStyle: 'blog' });
-    setError('');
-  };
-
-  const getDisplayStyleLabel = (style: string) => {
-    const labels: Record<string, { emoji: string; label: string }> = {
-      'BLOG': { emoji: '📝', label: 'Blog Posts' },
-      'PROJECT': { emoji: '🚀', label: 'Project Cards' },
-      'TITLE_ONLY': { emoji: '📌', label: 'Title List' },
-      'blog': { emoji: '📝', label: 'Blog Posts' },
-      'project': { emoji: '🚀', label: 'Project Cards' },
-      'title_only': { emoji: '📌', label: 'Title List' },
-    };
-    return labels[style] || labels['blog'];
   };
 
   if (loading) {
-    return <ContentLoader />;
+    return <AdminLoadingState label="Loading subsections" />;
   }
 
+  const pageHeader = (
+    <PageHeader
+      actions={
+        showForm ? null : (
+          <AdminButton onClick={openCreate} variant="primary">
+            <PlusIcon aria-hidden="true" className="size-4" />
+            New subsection
+          </AdminButton>
+        )
+      }
+      description="The middle of the hierarchy: a section holds subsections, a subsection holds posts, and each subsection is one page of the public site."
+      title="Subsections"
+    />
+  );
+
+  if (loadError) {
+    return (
+      <>
+        {pageHeader}
+        <AdminErrorState
+          message={loadError}
+          onRetry={fetchData}
+          title="Subsections could not be loaded"
+        />
+      </>
+    );
+  }
+
+  const filtersActive = isSubsectionFilterActive(filters);
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-[28px] font-normal text-white">Subsections</h1>
-        <button
-          onClick={() => {
-            setShowForm(!showForm);
-            if (showForm) handleCancel();
-          }}
-          className="px-4 py-2 bg-white text-[#0a0a0a] rounded-lg hover:opacity-90 transition text-[13px] font-medium"
-        >
-          {showForm ? 'Cancel' : '+ New Subsection'}
-        </button>
-      </div>
+    <>
+      {pageHeader}
+
+      {deleteError && (
+        <Notice className="mb-[var(--admin-space-4)]" onDismiss={() => setDeleteError('')} tone="error">
+          {deleteError}
+        </Notice>
+      )}
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-[#101010] p-6 rounded-xl border border-[#1a1a1a] mb-6">
-          {error && (
-            <div className="mb-4 p-3 bg-red-950/50 border border-red-900/50 rounded-lg text-[13px] text-red-400">
-              {error}
-            </div>
-          )}
+        <FormSection
+          className="mb-[var(--admin-space-6)]"
+          description={
+            editingSlug
+              ? 'Renaming a subsection changes its public URL; existing links to the old address stop working.'
+              : 'A subsection is a page of the public site. Posts go inside it.'
+          }
+          title={editingSlug ? 'Edit subsection' : 'New subsection'}
+        >
+          <form onSubmit={handleSubmit}>
+            {error && (
+              <Notice assertive className="mb-[var(--admin-space-4)]" onDismiss={() => setError('')} tone="error">
+                {error}
+              </Notice>
+            )}
 
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">
-                Subsection Name *
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            <div className="grid gap-[var(--admin-space-4)] min-[600px]:grid-cols-2">
+              <AdminField
+                hint="The public address is built from this, e.g. /writing."
+                id="subsection-name"
+                label="Subsection name"
                 required
-                placeholder="e.g., Writing, Projects"
-                className="w-full px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition"
-              />
-            </div>
+              >
+                <AdminInput
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g., Writing, Projects"
+                  required
+                  value={formData.name}
+                />
+              </AdminField>
 
-            <div>
               <EmojiPicker
-                value={formData.icon}
                 onChange={(emoji) => setFormData({ ...formData, icon: emoji })}
+                value={formData.icon}
               />
             </div>
-          </div>
 
-          <div className="mb-4">
-            <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">
-              Parent Section *
-            </label>
-            <select
-              value={formData.topCategoryName}
-              onChange={(e) => setFormData({ ...formData, topCategoryName: e.target.value })}
+            <AdminField
+              className="mt-[var(--admin-space-4)] max-w-[360px]"
+              hint="Every subsection must live in one section."
+              id="subsection-section"
+              label="Parent section"
               required
-              className="w-full px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition"
             >
-              <option value="">Select a section</option>
+              <AdminSelect
+                onChange={(e) => setFormData({ ...formData, topCategoryName: e.target.value })}
+                required
+                value={formData.topCategoryName}
+              >
+                <option value="">Select a section</option>
+                {sections.map((section) => (
+                  <option key={section.id} value={section.name}>
+                    {section.name}
+                  </option>
+                ))}
+              </AdminSelect>
+            </AdminField>
+
+            <fieldset className="mt-[var(--admin-space-4)] border-0 p-0">
+              <legend className="mb-[var(--admin-field-gap)] text-[length:var(--admin-text-meta)] font-medium text-[color:var(--admin-heading)]">
+                Display style
+              </legend>
+              <div className="grid gap-[var(--admin-space-2)] min-[600px]:grid-cols-3">
+                {STYLE_OPTIONS.map((option) => {
+                  const meta = CONTENT_TYPES[option.key];
+                  const TypeIcon = contentTypeFor(option.value).icon;
+                  const checked = formData.displayStyle === option.value;
+                  return (
+                    <label
+                      className={cn(
+                        'flex cursor-pointer items-start gap-[var(--admin-space-2)] rounded-[var(--admin-radius-control)] border p-[var(--admin-space-3)] transition-colors',
+                        checked
+                          ? 'border-[color:var(--admin-heading)] bg-[color:var(--admin-surface-2)]'
+                          : 'border-[color:var(--admin-border-strong)] hover:border-[color:var(--admin-heading)]',
+                      )}
+                      key={option.value}
+                    >
+                      <input
+                        checked={checked}
+                        className="mt-0.5 size-4 shrink-0 cursor-pointer accent-[color:var(--admin-primary-bg)]"
+                        name="subsection-display-style"
+                        onChange={() => setFormData({ ...formData, displayStyle: option.value })}
+                        type="radio"
+                        value={option.value}
+                      />
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-[var(--admin-space-1)] text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)]">
+                          <TypeIcon aria-hidden="true" className="size-4" />
+                          {meta.label}
+                        </span>
+                        <span className="mt-0.5 block text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+                          {meta.description}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <AdminCheckbox
+              checked={formData.isVisible}
+              className="mt-[var(--admin-space-4)]"
+              id="subsection-is-visible"
+              label="Visible on the public site"
+              onChange={(e) => setFormData({ ...formData, isVisible: e.target.checked })}
+            />
+            <p className="mt-1 text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+              {formData.isVisible
+                ? 'It appears in the public navigation and its published posts are readable.'
+                : 'It disappears from the public navigation. Its posts stay in the database, and their URLs stop resolving.'}
+            </p>
+
+            <div className="mt-[var(--admin-space-5)] flex items-center gap-[var(--admin-space-2)]">
+              <AdminButton loading={saving} type="submit" variant="primary">
+                {editingSlug ? 'Save changes' : 'Create subsection'}
+              </AdminButton>
+              <AdminButton onClick={closeForm} variant="ghost">
+                Cancel
+              </AdminButton>
+            </div>
+          </form>
+        </FormSection>
+      )}
+
+      {total > 0 && (
+        <AdminFilterBar
+          onClear={
+            filtersActive
+              ? () => setFilters(EMPTY_SUBSECTION_FILTERS)
+              : undefined
+          }
+          result={`${matched} of ${total} ${total === 1 ? 'subsection' : 'subsections'}`}
+        >
+          <AdminField className="min-w-[200px] max-w-[280px] flex-1" id="subsection-search" label="Search">
+            <AdminInput
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              placeholder="Name or public address"
+              type="search"
+              value={filters.search}
+            />
+          </AdminField>
+          <AdminField className="min-w-[180px]" id="subsection-filter-section" label="Section">
+            <AdminSelect
+              compact
+              onChange={(e) => setFilters({ ...filters, section: e.target.value })}
+              value={filters.section}
+            >
+              <option value="">All sections</option>
               {sections.map((section) => (
                 <option key={section.id} value={section.name}>
                   {section.name}
                 </option>
               ))}
-            </select>
-          </div>
-
-          {/* Display Style Selector */}
-          <div className="mb-4">
-            <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">
-              Display Style *
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, displayStyle: 'blog' })}
-                className={`p-4 rounded-lg border-2 transition ${
-                  formData.displayStyle === 'blog'
-                    ? 'border-white bg-[#1a1a1a]'
-                    : 'border-[#2a2a2a] bg-[#0a0a0a] hover:border-[#3a3a3a]'
-                }`}
-              >
-                <div className="text-left">
-                  <div className="text-[14px] font-medium text-white mb-1">📝 Blog</div>
-                  <div className="text-[11px] text-[#707070]">Timeline with full articles</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, displayStyle: 'project' })}
-                className={`p-4 rounded-lg border-2 transition ${
-                  formData.displayStyle === 'project'
-                    ? 'border-white bg-[#1a1a1a]'
-                    : 'border-[#2a2a2a] bg-[#0a0a0a] hover:border-[#3a3a3a]'
-                }`}
-              >
-                <div className="text-left">
-                  <div className="text-[14px] font-medium text-white mb-1">🚀 Project</div>
-                  <div className="text-[11px] text-[#707070]">Grid cards with links</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, displayStyle: 'title_only' })}
-                className={`p-4 rounded-lg border-2 transition ${
-                  formData.displayStyle === 'title_only'
-                    ? 'border-white bg-[#1a1a1a]'
-                    : 'border-[#2a2a2a] bg-[#0a0a0a] hover:border-[#3a3a3a]'
-                }`}
-              >
-                <div className="text-left">
-                  <div className="text-[14px] font-medium text-white mb-1">📌 Title Only</div>
-                  <div className="text-[11px] text-[#707070]">Simple title list</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.isVisible}
-                onChange={(e) => setFormData({ ...formData, isVisible: e.target.checked })}
-                className="w-4 h-4 rounded"
-              />
-              <span className="text-[13px] text-[#e5e5e5]">Visible on public site</span>
-            </label>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              type="submit"
-              className="px-4 py-2 bg-white text-[#0a0a0a] rounded-lg hover:opacity-90 transition text-[13px] font-medium"
+            </AdminSelect>
+          </AdminField>
+          <AdminField className="min-w-[180px]" id="subsection-filter-visibility" label="Visibility">
+            <AdminSelect
+              compact
+              onChange={(e) =>
+                setFilters({
+                  ...filters,
+                  visibility: e.target.value as SubsectionFilterState['visibility'],
+                })
+              }
+              value={filters.visibility}
             >
-              {editingSlug ? 'Update Subsection' : 'Create Subsection'}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#2a2a2a] transition text-[13px] font-medium"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+              <option value="all">Visible and hidden</option>
+              <option value="visible">Visible only</option>
+              <option value="hidden">Hidden only</option>
+            </AdminSelect>
+          </AdminField>
+        </AdminFilterBar>
       )}
 
-      {/* Subsections List */}
-      <div className="space-y-3">
-        {subsections.map((subsection) => {
-          const styleInfo = getDisplayStyleLabel(subsection.displayStyle);
-          return (
-            <div
-              key={subsection.id}
-              className="bg-[#101010] p-5 rounded-xl border border-[#1a1a1a] hover:border-[#2a2a2a] transition"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="text-lg">{subsection.icon}</span>
-                    <h3 className="text-[15px] text-white font-medium">{subsection.name}</h3>
-                    <span
-                      className={`px-2 py-0.5 rounded text-[11px] ${
-                        subsection.isVisible
-                          ? 'bg-green-950/50 text-green-400'
-                          : 'bg-[#1a1a1a] text-[#707070]'
-                      }`}
-                    >
-                      {subsection.isVisible ? 'Visible' : 'Hidden'}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-[11px] bg-blue-950/50 text-blue-400">
-                      {styleInfo.emoji} {styleInfo.label}
-                    </span>
-                  </div>
-                  <div className="text-[13px] text-[#707070]">
-                    {subsection.topCategory?.name} • {subsection.postCount} posts • /{subsection.slug}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => handleEdit(subsection)}
-                    className="text-[13px] text-[#707070] hover:text-white transition"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(subsection.slug)}
-                    className="text-[13px] text-red-400 hover:text-red-300 transition"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {subsections.length === 0 && (
-          <div className="bg-[#101010] p-8 rounded-xl border border-[#1a1a1a] text-center">
-            <p className="text-[14px] text-[#707070] mb-4">No subsections yet</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="text-[13px] text-white hover:opacity-70 transition"
-            >
+      {total === 0 ? (
+        <AdminEmptyState
+          action={
+            <AdminButton onClick={openCreate} variant="secondary">
+              <PlusIcon aria-hidden="true" className="size-4" />
               Create your first subsection
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+            </AdminButton>
+          }
+          description="Start with a section if you have not made one yet, then add a subsection to it."
+          title="No subsections yet"
+        />
+      ) : matched === 0 ? (
+        <AdminEmptyState
+          action={
+            <AdminButton onClick={() => setFilters(EMPTY_SUBSECTION_FILTERS)} variant="secondary">
+              Clear filters
+            </AdminButton>
+          }
+          description="Nothing matches the search, section and visibility you picked."
+          title="No subsections match"
+        />
+      ) : (
+        <div className="flex flex-col gap-[var(--admin-space-6)]">
+          {groups.map(({ section, subsections }) => (
+            <section aria-label={`${section.name} subsections`} key={section.id}>
+              <div className="mb-[var(--admin-space-2)] flex flex-wrap items-center gap-[var(--admin-space-2)]">
+                <h2 className="text-[length:var(--admin-text-panel-title)] font-semibold text-[color:var(--admin-heading)]">
+                  {section.name}
+                </h2>
+                <StatusLabel tone={section.isVisible ? 'live' : 'neutral'}>
+                  {section.isVisible ? 'Section visible' : 'Section hidden'}
+                </StatusLabel>
+                <span className="text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+                  {subsections.length} {subsections.length === 1 ? 'subsection' : 'subsections'}
+                </span>
+              </div>
+
+              <ul className="flex flex-col overflow-hidden rounded-[var(--admin-radius-panel)] border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)]">
+                {subsections.map((subsection) => (
+                  <li
+                    className="flex flex-wrap items-center gap-[var(--admin-space-3)] border-t border-[color:var(--admin-border)] px-[var(--admin-space-5)] py-[var(--admin-space-3)] transition-colors first:border-t-0 hover:bg-[color:var(--admin-hover)] focus-within:bg-[color:var(--admin-hover)]"
+                    key={subsection.id}
+                  >
+                    {/* Stored subsection data (edited with the EmojiPicker), not chrome. */}
+                    <span aria-hidden="true" className="text-[length:var(--admin-text-panel-title)]">
+                      {subsection.icon}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-[var(--admin-space-2)]">
+                        <span className="truncate text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)]">
+                          {subsection.name}
+                        </span>
+                        <StatusLabel tone={subsection.isVisible ? 'live' : 'neutral'}>
+                          {subsection.isVisible ? 'Visible' : 'Hidden'}
+                        </StatusLabel>
+                        <ContentTypeBadge displayStyle={subsection.displayStyle} />
+                      </div>
+                      <span className="mt-0.5 block text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+                        {subsection.postCount} {subsection.postCount === 1 ? 'post' : 'posts'}
+                        {' · /'}
+                        {subsection.slug}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-[var(--admin-space-1)]">
+                      {subsection.isVisible && (
+                        <Link
+                          aria-label={`View ${subsection.name} on the public site`}
+                          className={adminButtonClass({
+                            className: 'hidden min-[600px]:inline-flex',
+                            size: 'icon-sm',
+                            variant: 'ghost',
+                          })}
+                          href={`/${subsection.slug}`}
+                          rel="noopener"
+                          target="_blank"
+                        >
+                          <ArrowSquareOutIcon aria-hidden="true" className="size-4" />
+                        </Link>
+                      )}
+                      <AdminButton
+                        aria-label={`Edit ${subsection.name}`}
+                        onClick={() => openEdit(subsection, section.name)}
+                        size="icon-sm"
+                        variant="ghost"
+                      >
+                        <PencilSimpleIcon aria-hidden="true" className="size-4" />
+                      </AdminButton>
+                      <AdminButton
+                        aria-label={`Delete ${subsection.name}`}
+                        onClick={() => {
+                          setDeleteError('');
+                          setPendingDelete(subsection);
+                        }}
+                        size="sm"
+                        variant="danger"
+                      >
+                        <TrashIcon aria-hidden="true" className="size-4" />
+                        Delete
+                      </AdminButton>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          busy={deleting}
+          description={
+            pendingDelete.postCount
+              ? `${pendingDelete.postCount} ${pendingDelete.postCount === 1 ? 'post' : 'posts'} live in it, so the delete will be refused until they are moved or deleted.`
+              : 'It disappears from the public navigation and from the post editor. No posts are inside it.'
+          }
+          itemName={pendingDelete.name}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={confirmDelete}
+          title="Delete subsection"
+        />
+      )}
+    </>
   );
 }

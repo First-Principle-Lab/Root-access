@@ -1,263 +1,424 @@
 'use client';
 
-import { adminApi } from '@/src/lib/api';
-import { Post, TopCategory } from '@/src/types';
-import { useEffect, useState } from 'react';
-import { SubsectionFilter } from '../subsections/SubSectionFilter';
-import { PostForm } from './postForm';
-import { PostListItem } from './postListItem';
-import { PostEditModal } from './PostEditModal';
-import { ContentLoader } from '../../ui/Spinner';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { MagnifyingGlassIcon, PlusIcon } from '@phosphor-icons/react';
+import { adminApi, requestFailureMessage } from '@/src/lib/api';
+import { buildPostListPageItems, isPostFilterActive, type PostListRequest } from '@/src/lib/postFilters';
+import type { PostListItem, PostListResponse, TopCategory } from '@/src/types';
+import { AdminButton, adminButtonClass } from '@/src/components/ui/admin-button';
+import { AdminField, AdminInput, AdminSelect } from '@/src/components/ui/admin-field';
+import { AdminFilterBar } from '@/src/components/ui/admin-filter-bar';
+import { AdminEmptyState, AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-state';
+import { ConfirmDialog } from '@/src/components/ui/confirm-dialog';
+import { Notice } from '@/src/components/ui/notice';
+import { PageHeader } from '@/src/components/ui/page-header';
+import { NEW_POST_PATH } from '@/src/lib/postEditor';
+import { PostListItemRow } from './postListItem';
 
-const INITIAL_FORM_DATA = {
-  title: '',
-  description: '',
-  content: '',
-  excerpt: '',
-  coverImage: '',
-  published: false,
-  tags: '',
-  projectLink: '',
-  archiveYear: null as number | null,
+/** What the filter row controls. `page` resets to 1 whenever anything else changes. */
+interface PostFilterState {
+  search: string;
+  status: 'all' | 'published' | 'draft';
+  subsection: string;
+  sort: 'updated' | 'created' | 'title';
+  page: number;
+}
+
+const EMPTY_POST_FILTERS: PostFilterState = {
+  search: '',
+  status: 'all',
+  subsection: '',
+  sort: 'updated',
+  page: 1,
 };
 
-type DisplayStyleInput = 'blog' | 'project' | 'title_only';
+/* Ten rows fits a 1440x900 screen without scrolling past the fold and makes the seeded 17 posts
+   two pages, so pagination is exercised by the real data rather than by a fixture. */
+const PAGE_SIZE = 10;
 
+const LIST_FAILURE =
+  'The posts could not be loaded. Your search and filters are fine - the request to the server failed.';
+
+/* Posts screen (checkpoints 5 and 6 of docs/admin-redesign-plan.md).
+   The baseline fetched the sections list and then one request per subsection
+   (`allSubsections.map(sub => adminApi.getPosts(sub.slug).catch(() => ({ posts: [] })))`), so nine
+   round trips built one list and any failed request looked like an empty subsection. It is now one
+   authenticated list request (src/app/api/admin/posts/route.ts) whose filtering, ordering and
+   paging happen on the server; the sections request that remains only fills the subsection filter
+   and the create form. A failed list is an error state with a retry, never an empty list. */
 export function PostsManager() {
   const [sections, setSections] = useState<TopCategory[]>([]);
-  const [selectedSubsection, setSelectedSubsection] = useState('');
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [allPosts, setAllPosts] = useState<Post[]>([]);
+  const [filters, setFilters] = useState<PostFilterState>(EMPTY_POST_FILTERS);
+  /* The search box is typed into immediately but only reaches the request after a pause, so one
+     keystroke does not mean one round trip. */
+  const [searchDraft, setSearchDraft] = useState('');
+
+  const [posts, setPosts] = useState<PostListItem[]>([]);
+  const [pageInfo, setPageInfo] = useState({ page: 1, totalPages: 1, total: 0, hasNextPage: false, hasPreviousPage: false });
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
-  const [error, setError] = useState('');
-  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
+  /* "Now" for the rows' relative dates, captured once per list load: `Date.now()` during render is
+     impure (react-hooks/purity) and per-row would give every row a different timestamp. */
+  const [listedAt, setListedAt] = useState<number | null>(null);
+
+  const [pendingDelete, setPendingDelete] = useState<PostListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [busySlug, setBusySlug] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    fetchSections();
+    let active = true;
+    (async () => {
+      try {
+        const res = (await adminApi.getSections()) as { sections: TopCategory[] };
+        if (active) setSections(res.sections);
+      } catch (err) {
+        /* The list itself still loads; only the subsection filter is degraded, and saying so is
+           better than an empty select that implies the site has no subsections. */
+        if (active) {
+          setSections([]);
+          setActionError(
+            `Subsections could not be listed, so the subsection filter is empty. ${requestFailureMessage(err, 'The request failed.')}`,
+          );
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
+  /* The sections tree only fills the subsection filter below (grouped by section); the posts
+     themselves come from the single list endpoint. */
+
+  // Only the committed filters decide the request, and the object identity changes with them.
+  const request = useMemo<PostListRequest>(
+    () => ({ ...filters, limit: PAGE_SIZE }),
+    [filters],
+  );
+
   useEffect(() => {
-    if (selectedSubsection) {
-      const filtered = allPosts.filter(p => p.subsection.slug === selectedSubsection);
-      setPosts(filtered);
-    } else {
-      setPosts(allPosts);
-    }
-  }, [selectedSubsection, allPosts]);
-
-  const fetchSections = async () => {
-    try {
-      const res = await adminApi.getSections() as { sections: TopCategory[] };
-      setSections(res.sections);
-      
-      const allSubsections = res.sections.flatMap((s) => s.subsections || []);
-      const postsPromises = allSubsections.map(sub => 
-        adminApi.getPosts(sub.slug).catch(() => ({ posts: [] }))
-      );
-      
-      const postsResults = await Promise.all(postsPromises);
-      const allPostsArray = postsResults.flatMap((r: any) => r.posts || []);
-      setAllPosts(allPostsArray);
-      setPosts(allPostsArray);
-    } catch (error) {
-      console.error('Failed to fetch sections:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getSubsectionDisplayStyle = (subsectionSlug: string): DisplayStyleInput => {
-    const subsection = sections
-      .flatMap(s => s.subsections || [])
-      .find(sub => sub.slug === subsectionSlug);
-    
-    // Map Prisma enum to form input
-    const displayStyleMap: Record<string, DisplayStyleInput> = {
-      'BLOG': 'blog',
-      'PROJECT': 'project',
-      'TITLE_ONLY': 'title_only'
+    let active = true;
+    setLoading(true);
+    setLoadError('');
+    (async () => {
+      try {
+        const res = (await adminApi.listPosts(request)) as PostListResponse;
+        if (!active) return;
+        setPosts(res.posts);
+        setListedAt(Date.now());
+        setPageInfo({
+          page: res.page,
+          totalPages: res.totalPages,
+          total: res.total,
+          hasNextPage: res.hasNextPage,
+          hasPreviousPage: res.hasPreviousPage,
+        });
+      } catch (err) {
+        if (!active) return;
+        setPosts([]);
+        setLoadError(requestFailureMessage(err, LIST_FAILURE));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
     };
-    
-    return displayStyleMap[subsection?.displayStyle || 'BLOG'] || 'blog';
-  };
+  }, [request, reloadToken]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  useEffect(() => {
+    if (searchDraft === filters.search) return;
+    const timer = setTimeout(() => setFilters((current) => ({ ...current, page: 1, search: searchDraft })), 300);
+    return () => clearTimeout(timer);
+  }, [searchDraft, filters.search]);
 
-    if (!selectedSubsection) {
-      setError('Please select a subsection');
-      return;
-    }
+  const changeFilters = (patch: Partial<PostFilterState>) =>
+    setFilters((current) => ({ ...current, page: 1, ...patch }));
 
-    const displayStyle = getSubsectionDisplayStyle(selectedSubsection);
+  const filtersActive = isPostFilterActive(filters);
+  const pageItems = buildPostListPageItems(pageInfo.page, pageInfo.totalPages);
 
-    // Validate based on subsection's display style
-    if (displayStyle === 'project' && !formData.projectLink) {
-      setError('Project link is required for project-style subsections');
-      return;
-    }
+  const reloadList = () => setReloadToken((token) => token + 1);
 
-    if (displayStyle === 'blog' && !formData.content) {
-      setError('Content is required for blog-style subsections');
-      return;
-    }
-
-    // For title_only, description is optional
-    if (displayStyle !== 'title_only' && !formData.description) {
-      setError('Description is required for this subsection type');
-      return;
-    }
-
+  const handleTogglePublish = async (post: PostListItem) => {
+    setActionError('');
+    setNotice('');
+    setBusySlug(post.slug);
     try {
-      const tags = formData.tags.split(',').map((t) => t.trim()).filter(Boolean);
-      
-      // For title_only posts, send empty description
-      const postData = {
-        ...formData,
-        description: displayStyle === 'title_only' ? '' : formData.description,
-        tags,
-      };
-      
-      await adminApi.createPost(selectedSubsection, postData);
-      
-      setFormData(INITIAL_FORM_DATA);
-      setShowForm(false);
-      fetchSections();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create post');
-    }
-  };
-
-  const handleEdit = (post: Post) => {
-    setEditingPost(post);
-  };
-
-  const handleCloseEdit = () => {
-    setEditingPost(null);
-  };
-
-  const handleSaveEdit = () => {
-    fetchSections();
-  };
-
-  const handleTogglePublish = async (post: Post) => {
-    try {
-      await adminApi.togglePublish(
-        post.subsection.slug,
-        post.slug,
-        !post.published
+      await adminApi.togglePublish(post.subsection.slug, post.slug, !post.published);
+      setNotice(
+        post.published
+          ? `“${post.title}” is no longer on the public site.`
+          : `“${post.title}” is live on the public site.`,
       );
-      fetchSections();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update post');
+      reloadList();
+    } catch (err) {
+      // Reported where it happened instead of in a modal that blocks the list (the
+      // baseline used window.alert, PostsManager.tsx:155 in the pre-change tree).
+      setActionError(
+        `“${post.title}” is still ${post.published ? 'published' : 'a draft'}. ${requestFailureMessage(err, 'The request failed.')}`,
+      );
+    } finally {
+      setBusySlug('');
     }
   };
 
-  const handleDelete = async (post: Post) => {
-    if (!confirm('Are you sure you want to delete this post?')) return;
-
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setActionError('');
     try {
-      await adminApi.deletePost(post.subsection.slug, post.slug);
-      fetchSections();
-    } catch (err: any) {
-      alert(err.message || 'Delete failed');
+      await adminApi.deletePost(pendingDelete.subsection.slug, pendingDelete.slug);
+      const title = pendingDelete.title;
+      setPendingDelete(null);
+      setNotice(`“${title}” was deleted.`);
+      reloadList();
+    } catch (err) {
+      setActionError(
+        `“${pendingDelete.title}” was not deleted. ${requestFailureMessage(err, 'The request failed.')}`,
+      );
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const handleCancelForm = () => {
-    setShowForm(false);
-    setFormData(INITIAL_FORM_DATA);
-    setError('');
+  const listBody = () => {
+    if (loading) return <AdminLoadingState label="Loading posts" />;
+    if (loadError) {
+      return (
+        <AdminErrorState
+          message={loadError}
+          onRetry={reloadList}
+          retryLabel="Try again"
+          title="Posts could not be loaded"
+        />
+      );
+    }
+    if (posts.length === 0) {
+      return filtersActive ? (
+        <AdminEmptyState
+          description="Nothing matches the current search and filters. Clear them to see every post again."
+          icon={MagnifyingGlassIcon}
+          title="No posts match these filters"
+          action={
+            <AdminButton
+              onClick={() => {
+                setSearchDraft('');
+                setFilters(EMPTY_POST_FILTERS);
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              Clear filters
+            </AdminButton>
+          }
+        />
+      ) : (
+        <AdminEmptyState
+          description="Nothing is published yet. The first post can be written here."
+          title="No posts yet"
+          action={
+            <Link className={adminButtonClass({ size: 'sm', variant: 'primary' })} href={NEW_POST_PATH}>
+              <PlusIcon aria-hidden="true" className="size-4" />
+              New post
+            </Link>
+          }
+        />
+      );
+    }
+
+    return (
+      <ul
+        className="flex flex-col overflow-hidden rounded-[var(--admin-radius-panel)] border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)]"
+        data-slot="post-list"
+      >
+        {posts.map((post) => (
+          <PostListItemRow
+            busy={busySlug === post.slug}
+            key={post.id}
+            onDelete={() => {
+              setActionError('');
+              setNotice('');
+              setPendingDelete(post);
+            }}
+            onTogglePublish={() => void handleTogglePublish(post)}
+            now={listedAt}
+            post={post}
+          />
+        ))}
+      </ul>
+    );
   };
-
-  const allSubsections = sections.flatMap((s) => s.subsections || []);
-
-  // Calculate post counts per subsection
-  const postCounts: Record<string, number> = {};
-  allPosts.forEach(post => {
-    postCounts[post.subsection.slug] = (postCounts[post.subsection.slug] || 0) + 1;
-  });
-
-  const currentDisplayStyle = selectedSubsection ? getSubsectionDisplayStyle(selectedSubsection) : 'blog';
-
-  if (loading) {
-    return <ContentLoader />;
-  }
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
-        <h1 className="text-2xl sm:text-[28px] font-normal text-white">Posts</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="w-full sm:w-auto px-4 py-2 bg-white text-[#0a0a0a] rounded-lg hover:opacity-90 transition text-[13px] font-medium touch-manipulation"
-        >
-          {showForm ? 'Cancel' : '+ New Post'}
-        </button>
-      </div>
-
-      {/* Subsection Filter */}
-      <SubsectionFilter
-        subsections={allSubsections}
-        selectedSubsection={selectedSubsection}
-        onChange={setSelectedSubsection}
-        postCounts={postCounts}
-        totalPosts={allPosts.length}
+      <PageHeader
+        actions={
+          /* Create is the editor page too, so there is one writing surface instead of the
+             baseline's inline form plus modal. */
+          <Link className={adminButtonClass({ variant: 'primary' })} href={NEW_POST_PATH}>
+            <PlusIcon aria-hidden="true" className="size-4" />
+            New post
+          </Link>
+        }
+        description="Every post across the site, newest edited first. Nothing here is visible to readers until you publish it."
+        title="Posts"
       />
 
-      {/* Post Form */}
-      {showForm && (
-        <PostForm
-          formData={formData}
-          onChange={setFormData}
-          onSubmit={handleSubmit}
-          onCancel={handleCancelForm}
-          subsections={allSubsections}
-          selectedSubsection={selectedSubsection}
-          onSubsectionChange={setSelectedSubsection}
-          error={error}
-          displayStyle={currentDisplayStyle}
-        />
+      {actionError && (
+        <Notice
+          assertive
+          className="mb-[var(--admin-space-4)]"
+          onDismiss={() => setActionError('')}
+          tone="error"
+        >
+          {actionError}
+        </Notice>
       )}
+
+      {notice && (
+        <Notice className="mb-[var(--admin-space-4)]" onDismiss={() => setNotice('')} tone="success">
+          {notice}
+        </Notice>
+      )}
+
+      {/* Subsection filter */}
+      <AdminFilterBar
+        onClear={
+          filtersActive
+            ? () => {
+                setSearchDraft('');
+                setFilters(EMPTY_POST_FILTERS);
+              }
+            : undefined
+        }
+        result={`${pageInfo.total} ${pageInfo.total === 1 ? 'post' : 'posts'}`}
+      >
+        <AdminField className="min-w-[200px] max-w-[280px] flex-1" id="post-search" label="Search">
+          <AdminInput
+            onChange={(e) => setSearchDraft(e.target.value)}
+            placeholder="Title or summary"
+            type="search"
+            value={searchDraft}
+          />
+        </AdminField>
+        <AdminField className="min-w-[150px]" id="post-filter-status" label="Status">
+          <AdminSelect
+            compact
+            onChange={(e) => changeFilters({ status: e.target.value as PostFilterState['status'] })}
+            value={filters.status}
+          >
+            <option value="all">All statuses</option>
+            <option value="published">Published</option>
+            <option value="draft">Drafts</option>
+          </AdminSelect>
+        </AdminField>
+        {/* Optgroups carry the section -> subsection hierarchy into the filter itself. */}
+        <AdminField className="min-w-[190px]" id="post-filter-subsection" label="Subsection">
+          <AdminSelect
+            compact
+            onChange={(e) => changeFilters({ subsection: e.target.value })}
+            value={filters.subsection}
+          >
+            <option value="">All subsections</option>
+            {sections.map((section) => (
+              <optgroup key={section.id} label={section.name}>
+                {(section.subsections ?? []).map((subsection) => (
+                  <option key={subsection.id} value={subsection.slug}>
+                    {subsection.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </AdminSelect>
+        </AdminField>
+        <AdminField className="min-w-[170px]" id="post-sort" label="Order">
+          <AdminSelect
+            compact
+            onChange={(e) => changeFilters({ sort: e.target.value as PostFilterState['sort'] })}
+            value={filters.sort}
+          >
+            <option value="updated">Recently edited</option>
+            <option value="created">Newest first</option>
+            <option value="title">Title A–Z</option>
+          </AdminSelect>
+        </AdminField>
+      </AdminFilterBar>
 
       {/* Posts List */}
-      <div className="space-y-3">
-        {posts.map((post) => (
-          <PostListItem
-            key={post.id}
-            post={post}
-            onTogglePublish={handleTogglePublish}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-          />
-        ))}
+      {listBody()}
 
-        {posts.length === 0 && (
-          <div className="bg-[#101010] p-6 sm:p-8 rounded-xl border border-[#1a1a1a] text-center">
-            <p className="text-[14px] text-[#707070] mb-4">
-              {selectedSubsection ? 'No posts in this subsection yet' : 'No posts yet'}
-            </p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="text-[13px] text-white hover:opacity-70 transition"
-            >
-              Create your first post
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Page buttons, only when there is more than one page of results. */}
+      {!loading && !loadError && pageInfo.totalPages > 1 && (
+        <nav
+          aria-label="Posts pages"
+          className="mt-[var(--admin-space-5)] flex flex-wrap items-center gap-[var(--admin-space-2)]"
+          data-slot="post-list-pagination"
+        >
+          <AdminButton
+            disabled={!pageInfo.hasPreviousPage}
+            onClick={() => setFilters((current) => ({ ...current, page: current.page - 1 }))}
+            size="sm"
+            variant="secondary"
+          >
+            Previous
+          </AdminButton>
+          {pageItems.map((item, index) =>
+            item === 'gap' ? (
+              <span
+                aria-hidden="true"
+                className="px-1 text-[length:var(--admin-text-meta)] text-[color:var(--admin-subtle)]"
+                key={`gap-${index}`}
+              >
+                …
+              </span>
+            ) : (
+              <AdminButton
+                aria-current={item === pageInfo.page ? 'page' : undefined}
+                key={item}
+                onClick={() => setFilters((current) => ({ ...current, page: item }))}
+                size="sm"
+                variant={item === pageInfo.page ? 'primary' : 'secondary'}
+              >
+                {item}
+              </AdminButton>
+            ),
+          )}
+          <AdminButton
+            disabled={!pageInfo.hasNextPage}
+            onClick={() => setFilters((current) => ({ ...current, page: current.page + 1 }))}
+            size="sm"
+            variant="secondary"
+          >
+            Next
+          </AdminButton>
+          <span className="ml-auto text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+            Page {pageInfo.page} of {pageInfo.totalPages}
+          </span>
+        </nav>
+      )}
 
-      {/* Edit Modal */}
-      {editingPost && (
-        <PostEditModal
-          post={editingPost}
-          onClose={handleCloseEdit}
-          onSave={handleSaveEdit}
+      {/* Deleting a post is unrecoverable (there is no trash), so the row control opens the
+          shared confirmation dialog instead of window.confirm, and it says where the post
+          lives so the person can tell two same-titled posts apart. */}
+      {pendingDelete && (
+        <ConfirmDialog
+          busy={deleting}
+          description={`It lives in ${pendingDelete.subsection.name} and is ${
+            pendingDelete.published ? 'live on the public site' : 'a draft'
+          }. Deleting removes it permanently; there is no undo.`}
+          itemName={pendingDelete.title}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={handleDelete}
+          title="Delete post"
         />
       )}
+
     </div>
   );
 }

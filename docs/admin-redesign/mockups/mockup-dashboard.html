@@ -1,0 +1,186 @@
+<!doctype html>
+<html class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin mockup - Dashboard</title>
+<link rel="stylesheet" href="admin-mock.css">
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') || 'dark';
+  document.documentElement.className = theme === 'light' ? '' : 'dark';
+  addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.admin-theme-label').forEach((el) => {
+      el.textContent = theme === 'light' ? 'Light theme' : 'Dark theme';
+    });
+  });
+</script>
+</head>
+<body class="admin-mock">
+<a class="admin-skip" href="#admin-main">Skip to content</a>
+
+<div class="admin-sidebar" id="admin-nav">
+  <a class="admin-brand" href="#">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+    Editing · parth.dev
+  </a>
+  <nav class="admin-nav" aria-label="Admin">
+    <a href="#" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Sections</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 9a2 2 0 0 1 2-2h3l2 2h9a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 4h8"/></svg>Subsections</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 4h9l5 5v11H5z"/><path d="M14 4v5h5"/><path d="M8 13h8M8 17h6"/></svg>Posts</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg>Tags</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>Profile</a>
+  </nav>
+  <div class="admin-sidebar-foot">
+    <a class="admin-link-ext" href="/">View site
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+    </a>
+    <button class="admin-btn admin-btn--ghost" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l5 3"/></svg>
+      <span class="admin-theme-label">Dark theme</span>
+    </button>
+    <button class="admin-btn admin-btn--ghost" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 4h4v16h-4"/><path d="M11 8 7 12l4 4M7 12h9"/></svg>
+      Log out
+    </button>
+  </div>
+</div>
+
+<div class="admin-main" id="admin-main">
+  <header class="admin-topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="admin-menu-button" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="admin-nav">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <p class="admin-crumb">Editing <span aria-hidden="true">/</span> <strong>Dashboard</strong></p>
+    </div>
+    <div class="admin-topbar-right">
+      <a class="admin-link-ext" href="/">View site
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <div class="admin-body">
+    <div class="admin-page-head">
+      <div>
+        <h1 class="admin-page-title">Dashboard</h1>
+        <p class="admin-page-desc">What is published, what is still a draft, and what you were last working on.</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a class="admin-btn admin-btn--secondary" href="#">Edit a post</a>
+        <a class="admin-btn admin-btn--primary" href="#">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          New post
+        </a>
+      </div>
+    </div>
+
+    <div class="admin-metrics" role="group" aria-label="Content counts">
+      <p class="admin-metric"><b class="admin-num">12</b> <span>Published posts</span></p>
+      <p class="admin-metric"><b class="admin-num">5</b> <span>Drafts</span></p>
+      <p class="admin-metric"><b class="admin-num">6</b> <span>Sections</span></p>
+      <p class="admin-metric"><b class="admin-num">7</b> <span>Subsections</span></p>
+      <p class="admin-metric"><b class="admin-num">4</b> <span>Tags</span></p>
+      <p class="admin-metric"><b class="admin-num">1</b> <span>Hidden subsection</span></p>
+    </div>
+
+    <section class="admin-panel" style="margin-top:24px">
+      <div class="admin-panel-head">
+        <div>
+          <p class="admin-eyebrow">Continue editing</p>
+          <h2 class="admin-panel-title">Drafts and unpublished changes</h2>
+        </div>
+        <a class="admin-link-ext" href="#">All drafts (5)</a>
+      </div>
+      <div class="admin-list">
+        <div class="admin-row">
+          <div class="admin-row-main">
+            <span class="admin-row-title">Unfinished notes on retrieval caching</span>
+            <span class="admin-row-sub">Essays &rsaquo; Writing &middot; edited 2 days ago</span>
+          </div>
+          <div class="admin-row-side">
+            <span class="admin-status admin-status--off">Draft</span>
+            <div class="admin-actions">
+              <a class="admin-btn admin-btn--secondary" href="#">Continue</a>
+              <button class="admin-btn admin-btn--ghost admin-btn--icon" type="button" aria-label="Publish Unfinished notes on retrieval caching">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="admin-row">
+          <div class="admin-row-main">
+            <span class="admin-row-title">NewsHog</span>
+            <span class="admin-row-sub">Built &rsaquo; Projects &middot; edited 4 days ago</span>
+          </div>
+          <div class="admin-row-side">
+            <span class="admin-type"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 7l3 3-8 8H6v-3z"/><path d="M4 20h16"/></svg>Project</span>
+            <span class="admin-status admin-status--off">Draft</span>
+            <div class="admin-actions">
+              <a class="admin-btn admin-btn--secondary" href="#">Continue</a>
+              <button class="admin-btn admin-btn--ghost admin-btn--icon" type="button" aria-label="Publish NewsHog">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="admin-row">
+          <div class="admin-row-main">
+            <span class="admin-row-title">A very long section heading that should truncate gracefully inside dense admin tables without breaking the row layout</span>
+            <span class="admin-row-sub">Engineering &rsaquo; Writing &middot; published, has an unsaved draft copy</span>
+          </div>
+          <div class="admin-row-side">
+            <span class="admin-status admin-status--on">Published</span>
+            <div class="admin-actions">
+              <a class="admin-btn admin-btn--secondary" href="#">Continue</a>
+              <button class="admin-btn admin-btn--ghost admin-btn--icon" type="button" aria-label="Edit unsaved changes for long titled post">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-panel" style="margin-top:24px">
+      <div class="admin-panel-head">
+        <div>
+          <p class="admin-eyebrow">Recently published</p>
+          <h2 class="admin-panel-title">Live on the site</h2>
+        </div>
+        <a class="admin-link-ext" href="#">Open writing archive</a>
+      </div>
+      <div class="admin-list">
+        <div class="admin-row">
+          <div class="admin-row-main">
+            <span class="admin-row-title">How GNHF schedules long agent runs</span>
+            <span class="admin-row-sub">Engineering &rsaquo; Writing &middot; Nov 1, 2026 &middot; 129 views</span>
+          </div>
+          <div class="admin-row-side">
+            <span class="admin-status admin-status--on">Published</span>
+            <div class="admin-actions">
+              <a class="admin-btn admin-btn--ghost" href="#">Edit</a>
+              <button class="admin-btn admin-btn--ghost" type="button">Unpublish</button>
+            </div>
+          </div>
+        </div>
+        <div class="admin-row">
+          <div class="admin-row-main">
+            <span class="admin-row-title">Mimir</span>
+            <span class="admin-row-sub">Built &rsaquo; Projects &middot; Oct 28, 2026 &middot; 88 views</span>
+          </div>
+          <div class="admin-row-side">
+            <span class="admin-status admin-status--on">Published</span>
+            <div class="admin-actions">
+              <a class="admin-btn admin-btn--ghost" href="#">Edit</a>
+              <button class="admin-btn admin-btn--ghost" type="button">Unpublish</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

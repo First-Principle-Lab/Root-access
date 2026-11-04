@@ -1,302 +1,380 @@
-// src/components/admin/profile/profileManager.tsx (UPDATED)
 'use client';
 
-import { adminApi } from '@/src/lib/api';
-import { Profile } from '@/src/types';
-import { useEffect, useState, useRef } from 'react';
-import { ContentLoader, Spinner } from '../../ui/Spinner';
+import { useEffect, useRef, useState } from 'react';
+import { ImageSquareIcon, TrashIcon, UploadSimpleIcon } from '@phosphor-icons/react';
+import { adminApi, requestFailureMessage } from '@/src/lib/api';
+import type { Profile } from '@/src/types';
+import { AdminButton } from '@/src/components/ui/admin-button';
+import { AdminField, AdminInput, AdminTextarea } from '@/src/components/ui/admin-field';
+import { AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-state';
+import { FormSection } from '@/src/components/ui/form-section';
+import { Notice } from '@/src/components/ui/notice';
+import { PageHeader } from '@/src/components/ui/page-header';
+import {
+  EMPTY_PROFILE_FORM,
+  buildProfilePayload,
+  isProfileDirty,
+  profileFormFromProfile,
+  validateProfileForm,
+  type ProfileFieldKey,
+  type ProfileFormValues,
+} from './profileForm';
+
+/* Profile screen (checkpoint 5 of docs/admin-redesign-plan.md, "Profile controls").
+   The baseline was one long flat form: no grouping, no per-field validation (a half-typed URL came
+   back from the API as an opaque "Invalid data"), no save state, and an image upload whose failure
+   was swallowed by the promise it was thrown in - the button went back to "Change Picture" and
+   nothing said the upload failed. Fields are grouped now (image, bio, contact, social, resume),
+   each with its own error, and the save area stays reachable at the bottom of the form.
+   GitHub sits in the same group (checkpoint 7); the only field whose public icon survives an empty
+   value, because the icon predates the column - see DEFAULT_GITHUB_URL in src/lib/githubLink.ts. */
+
+const SOCIAL_FIELDS: { hint: string; id: ProfileFieldKey; label: string; placeholder: string }[] = [
+  {
+    hint: 'Leave empty to keep the default address the public icon already points at.',
+    id: 'githubLink',
+    label: 'GitHub',
+    placeholder: 'https://github.com/username',
+  },
+  {
+    hint: 'Leave empty to hide the icon on the public site.',
+    id: 'xLink',
+    label: 'X (Twitter)',
+    placeholder: 'https://x.com/username',
+  },
+  {
+    hint: 'Leave empty to hide the icon on the public site.',
+    id: 'linkedinLink',
+    label: 'LinkedIn',
+    placeholder: 'https://linkedin.com/in/username',
+  },
+  {
+    hint: 'Leave empty to hide the icon on the public site.',
+    id: 'instagramLink',
+    label: 'Instagram',
+    placeholder: 'https://instagram.com/username',
+  },
+];
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function ProfileManager() {
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [values, setValues] = useState<ProfileFormValues>(EMPTY_PROFILE_FORM);
+  const [saved, setSaved] = useState<ProfileFormValues>(EMPTY_PROFILE_FORM);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<ProfileFieldKey, string>>>({});
+  const [formError, setFormError] = useState('');
+  const [savedNotice, setSavedNotice] = useState('');
+  const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [formData, setFormData] = useState({
-    bio: '',
-    xLink: '',
-    instagramLink: '',
-    linkedinLink: '',
-    email: '',
-    resumeUrl: '',
-    profilePicture: '',
-  });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
   const fetchProfile = async () => {
+    setLoading(true);
+    setLoadError('');
     try {
-      const res = await adminApi.getProfile() as { profile: Profile };
-      setProfile(res.profile);
-      setFormData({
-        bio: res.profile.bio || '',
-        xLink: res.profile.xLink || '',
-        instagramLink: res.profile.instagramLink || '',
-        linkedinLink: res.profile.linkedinLink || '',
-        email: res.profile.email || '',
-        resumeUrl: res.profile.resumeUrl || '',
-        profilePicture: res.profile.profilePicture || '',
-      });
-    } catch (error) {
-      console.error('Failed to fetch profile:', error);
+      const res = (await adminApi.getProfile()) as { profile: Profile };
+      const next = profileFormFromProfile(res.profile);
+      setValues(next);
+      setSaved(next);
+    } catch (err) {
+      setLoadError(
+        requestFailureMessage(err, 'Your profile could not be reached. Check your connection and try again.'),
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  useEffect(() => {
+    void fetchProfile();
+  }, []);
+
+  const setField = (key: ProfileFieldKey, value: string) => {
+    setValues((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => (current[key] ? { ...current, [key]: undefined } : current));
+    setSavedNotice('');
+  };
+
+  const readImageAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('The file could not be read.'));
+      reader.readAsDataURL(file);
+    });
+
+  /* The upload failure path is the one this environment can actually exercise: there are no
+     Cloudinary credentials here, so /api/admin/upload answers 500 and the message has to land in
+     the UI with the rest of the form intact. */
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
 
-    // Validate file type
+    setUploadError('');
     if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
+      setUploadError('That is not an image. Choose a JPG, PNG or GIF.');
       return;
     }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image size should be less than 5MB');
+    if (file.size > MAX_IMAGE_BYTES) {
+      setUploadError(`${file.name} is larger than 5 MB. Pick a smaller file.`);
       return;
     }
 
     setUploading(true);
-    setError('');
-
     try {
-      // Convert to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      
-      reader.onload = async () => {
-        const base64 = reader.result as string;
-
-        // Upload to Cloudinary via API
-        const response = await fetch('/api/admin/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ image: base64 }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Upload failed');
-        }
-
-        const data = await response.json();
-        
-        // Update form data with new image URL
-        setFormData(prev => ({ ...prev, profilePicture: data.url }));
-        setSuccess('Image uploaded successfully');
-        setTimeout(() => setSuccess(''), 3000);
-      };
-
-      reader.onerror = () => {
-        setError('Failed to read file');
-      };
-    } catch (err: any) {
-      setError(err.message || 'Failed to upload image');
+      const image = await readImageAsDataUrl(file);
+      const uploaded = (await adminApi.uploadImage(image)) as { url: string };
+      setField('profilePicture', uploaded.url);
+      setSavedNotice('Picture uploaded. Save the profile to keep it.');
+    } catch (err) {
+      setUploadError(
+        `${err instanceof Error ? err.message : 'The upload failed'} Your other answers are still here, and the profile picture is unchanged.`,
+      );
     } finally {
       setUploading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFormError('');
+    setSavedNotice('');
 
+    const errors = validateProfileForm(values);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setFormError('Some fields need fixing before this can be saved.');
+      return;
+    }
+
+    setSaving(true);
     try {
-      await adminApi.updateProfile(formData);
-      setSuccess('Profile updated successfully');
-      setTimeout(() => setSuccess(''), 3000);
-      fetchProfile(); // Refresh profile data
-    } catch (err: any) {
-      setError(err.message || 'Failed to update profile');
+      const response = (await adminApi.updateProfile(buildProfilePayload(values))) as {
+        profile: Profile;
+      };
+      const next = profileFormFromProfile(response.profile);
+      setValues(next);
+      setSaved(next);
+      setSavedNotice('Profile saved.');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Your profile could not be saved.');
+    } finally {
+      setSaving(false);
     }
   };
 
   if (loading) {
-    return <ContentLoader />;
+    return <AdminLoadingState label="Loading profile" />;
   }
 
+  if (loadError) {
+    return (
+      <>
+        <PageHeader
+          description="The picture, bio and links the public site reads from here."
+          title="Profile"
+        />
+        <AdminErrorState message={loadError} onRetry={fetchProfile} title="Profile could not be loaded" />
+      </>
+    );
+  }
+
+  const dirty = isProfileDirty(values, saved);
+
   return (
-    <div>
-      <h1 className="text-[28px] font-normal text-white mb-8">Profile</h1>
+    <>
+      <PageHeader
+        description="The picture, bio and links the public site reads from here. Every field is optional except the ones the public sidebar already shows."
+        title="Profile"
+      />
 
-      <form onSubmit={handleSubmit} className="bg-[#101010] p-6 rounded-xl border border-[#1a1a1a] max-w-3xl">
-        {error && (
-          <div className="mb-4 p-3 bg-red-950/50 border border-red-900/50 rounded-lg text-[13px] text-red-400">
-            {error}
+      <form
+        className="flex flex-col gap-[var(--admin-space-5)]"
+        /* The browser's own `type="url"` constraint bubble would answer before this form does, so a
+           half-typed link would produce a native tooltip on one field and an inline message on the
+           others. Every admin form reports through AdminField instead. */
+        noValidate
+        onSubmit={handleSubmit}
+      >
+        {(formError || savedNotice) && (
+          <div className="flex flex-col gap-[var(--admin-space-2)]">
+            {formError && (
+              <Notice assertive onDismiss={() => setFormError('')} tone="error">
+                {formError}
+              </Notice>
+            )}
+            {savedNotice && !formError && (
+              <Notice onDismiss={() => setSavedNotice('')} tone="success">
+                {savedNotice}
+              </Notice>
+            )}
           </div>
         )}
 
-        {success && (
-          <div className="mb-4 p-3 bg-green-950/50 border border-green-900/50 rounded-lg text-[13px] text-green-400">
-            {success}
-          </div>
-        )}
-
-        {/* Profile Picture Upload */}
-        <div className="mb-6">
-          <label className="block text-[13px] font-medium text-[#e5e5e5] mb-3">
-            Profile Picture
-          </label>
-          
-          <div className="flex items-center gap-6">
-            {/* Current Picture */}
-            <div className="w-24 h-24 rounded-full bg-neutral-700 flex items-center justify-center overflow-hidden border-2 border-[#2a2a2a]">
-              {formData.profilePicture ? (
-                <img
-                  src={formData.profilePicture}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                />
+        <FormSection
+          description="Shown next to the bio on the public site."
+          title="Picture"
+        >
+          <div className="flex flex-wrap items-center gap-[var(--admin-space-4)]">
+            <span className="flex size-[80px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-[color:var(--admin-border-strong)] bg-[color:var(--admin-surface-2)]">
+              {values.profilePicture ? (
+                // eslint-disable-next-line @next/next/no-img-element -- the stored value is an absolute Cloudinary URL of any size, and next/image would need a remote-pattern entry the deployment does not have yet.
+                <img alt="Your current profile picture" className="size-full object-cover" src={values.profilePicture} />
               ) : (
-                <svg className="w-12 h-12 text-neutral-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
+                <ImageSquareIcon aria-hidden="true" className="size-7 text-[color:var(--admin-subtle)]" />
+              )}
+            </span>
+
+            <div className="flex min-w-0 flex-col gap-[var(--admin-space-2)]">
+              <div className="flex flex-wrap items-center gap-[var(--admin-space-2)]">
+                <AdminButton
+                  loading={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="secondary"
+                >
+                  <UploadSimpleIcon aria-hidden="true" className="size-4" />
+                  {uploading ? 'Uploading' : 'Change picture'}
+                </AdminButton>
+                {values.profilePicture && (
+                  <AdminButton
+                    onClick={() => {
+                      setField('profilePicture', '');
+                      setUploadError('');
+                    }}
+                    variant="ghost"
+                  >
+                    <TrashIcon aria-hidden="true" className="size-4" />
+                    Remove
+                  </AdminButton>
+                )}
+                <input
+                  accept="image/*"
+                  aria-label="Choose a profile picture file"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                  ref={fileInputRef}
+                  type="file"
+                />
+              </div>
+              <p className="text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+                JPG, PNG or GIF, up to 5 MB. The upload only stages the picture - it is applied when
+                you save.
+              </p>
+              {uploadError && (
+                <Notice assertive onDismiss={() => setUploadError('')} tone="error">
+                  {uploadError}
+                </Notice>
               )}
             </div>
-
-            {/* Upload Button */}
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#2a2a2a] transition text-[13px] font-medium disabled:opacity-50"
-              >
-                {uploading ? <Spinner size="sm" /> : 'Change Picture'}
-              </button>
-              <p className="text-[11px] text-[#707070] mt-2">
-                JPG, PNG or GIF. Max 5MB.
-              </p>
-            </div>
           </div>
-        </div>
+        </FormSection>
 
-        <div className="mb-6">
-          <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">Bio</label>
-          <textarea
-            value={formData.bio}
-            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-            rows={4}
-            placeholder="Write a brief bio about yourself..."
-            className="w-full px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition resize-none"
-          />
-        </div>
-
-        <div className="space-y-4 mb-6">
-          <div>
-            <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">
-              <span className="inline-flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                Email
+        <FormSection description="One or two sentences, shown in the public sidebar." title="Bio">
+          <AdminField
+            aside={
+              <span className="text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)] tabular-nums">
+                {values.bio.length} characters
               </span>
-            </label>
-            <input
+            }
+            error={fieldErrors.bio}
+            id="profile-bio"
+            label="Bio"
+          >
+            <AdminTextarea
+              /* The editor minimum (320px) is for a post body; a bio is one or two sentences, and
+                 a form section that tall pushes the rest of the page off screen for no reason. */
+              className="min-h-[120px]"
+              onChange={(e) => setField('bio', e.target.value)}
+              placeholder="Write a brief bio about yourself..."
+              value={values.bio}
+            />
+          </AdminField>
+        </FormSection>
+
+        <FormSection description="Where readers can reach you." title="Contact">
+          <AdminField
+            error={fieldErrors.email}
+            hint="Leave empty to hide the mail link."
+            id="profile-email"
+            label="Email"
+          >
+            <AdminInput
+              onChange={(e) => setField('email', e.target.value)}
+              placeholder="you@example.com"
               type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="your@email.com"
-              className="w-full px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition"
+              value={values.email}
             />
-          </div>
+          </AdminField>
+        </FormSection>
 
-          <div>
-            <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">
-              <span className="inline-flex items-center gap-2">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                </svg>
-                X (Twitter) Link
-              </span>
-            </label>
-            <input
-              type="url"
-              value={formData.xLink}
-              onChange={(e) => setFormData({ ...formData, xLink: e.target.value })}
-              placeholder="https://twitter.com/username"
-              className="w-full px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">
-              <span className="inline-flex items-center gap-2">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                </svg>
-                LinkedIn Link
-              </span>
-            </label>
-            <input
-              type="url"
-              value={formData.linkedinLink}
-              onChange={(e) => setFormData({ ...formData, linkedinLink: e.target.value })}
-              placeholder="https://linkedin.com/in/username"
-              className="w-full px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">
-              <span className="inline-flex items-center gap-2">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                </svg>
-                Instagram Link
-              </span>
-            </label>
-            <input
-              type="url"
-              value={formData.instagramLink}
-              onChange={(e) => setFormData({ ...formData, instagramLink: e.target.value })}
-              placeholder="https://instagram.com/username"
-              className="w-full px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">
-              <span className="inline-flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Resume URL
-              </span>
-            </label>
-            <input
-              type="url"
-              value={formData.resumeUrl}
-              onChange={(e) => setFormData({ ...formData, resumeUrl: e.target.value })}
-              placeholder="https://example.com/resume.pdf"
-              className="w-full px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] focus:outline-none focus:border-white transition"
-            />
-            <p className="text-[11px] text-[#707070] mt-2">Upload your resume to a hosting service (Google Drive, Dropbox, etc.) and paste the public URL here</p>
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          className="px-4 py-2 bg-white text-[#0a0a0a] rounded-lg hover:opacity-90 transition text-[13px] font-medium"
+        <FormSection
+          description="The icons in the public sidebar and footer point at these addresses."
+          title="Social links"
         >
-          Update Profile
-        </button>
+          <div className="grid gap-[var(--admin-space-4)] min-[600px]:grid-cols-2">
+            {SOCIAL_FIELDS.map((field) => (
+              <AdminField
+                error={fieldErrors[field.id]}
+                hint={field.hint}
+                id={`profile-${field.id}`}
+                key={field.id}
+                label={field.label}
+              >
+                <AdminInput
+                  onChange={(e) => setField(field.id, e.target.value)}
+                  placeholder={field.placeholder}
+                  type="url"
+                  value={values[field.id]}
+                />
+              </AdminField>
+            ))}
+          </div>
+        </FormSection>
+
+        <FormSection description="A public PDF link, offered as a resume button." title="Resume">
+          <AdminField
+            error={fieldErrors.resumeUrl}
+            hint="Host it anywhere public (Google Drive, Dropbox, your own site) and paste the link."
+            id="profile-resumeUrl"
+            label="Resume link"
+          >
+            <AdminInput
+              onChange={(e) => setField('resumeUrl', e.target.value)}
+              placeholder="https://example.com/resume.pdf"
+              type="url"
+              value={values.resumeUrl}
+            />
+          </AdminField>
+        </FormSection>
+
+        <div className="sticky bottom-0 -mx-[var(--admin-gutter)] flex flex-wrap items-center gap-[var(--admin-space-3)] border-t border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-[var(--admin-gutter)] py-[var(--admin-space-3)] shadow-[var(--admin-shadow-bar)]">
+          <AdminButton loading={saving} type="submit" variant="primary">
+            Save profile
+          </AdminButton>
+          <AdminButton
+            disabled={!dirty}
+            onClick={() => {
+              setValues(saved);
+              setFieldErrors({});
+              setFormError('');
+              setSavedNotice('');
+            }}
+            variant="ghost"
+          >
+            Discard changes
+          </AdminButton>
+          <p
+            aria-live="polite"
+            className="text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]"
+          >
+            {dirty ? 'Unsaved changes' : 'Everything on this page is saved.'}
+          </p>
+        </div>
       </form>
-    </div>
+    </>
   );
 }

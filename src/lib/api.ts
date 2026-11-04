@@ -1,5 +1,7 @@
 // src/lib/api.ts (UPDATED)
 
+import { buildPostListSearchParams, type PostListRequest } from './postFilters';
+
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 async function fetcher<T>(url: string, options?: RequestInit): Promise<T> {
@@ -18,6 +20,23 @@ async function fetcher<T>(url: string, options?: RequestInit): Promise<T> {
   }
 
   return res.json();
+}
+
+function withQuery(path: string, params: URLSearchParams): string {
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+/* A server error carries a message worth showing ("Cannot delete tag with 3 associated post(s)"),
+   but a request that never reached the server rejects with a bare `TypeError` whose text is
+   "Failed to fetch" / "Load failed" depending on the browser. That string is not actionable, so
+   every admin error state turns it into the sentence in `fallback`. */
+const TRANSPORT_ONLY_MESSAGE = /failed to fetch|load failed|networkerror|err_network|network request failed/i;
+
+export function requestFailureMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message.trim() : '';
+  if (!message || TRANSPORT_ONLY_MESSAGE.test(message)) return fallback;
+  return message;
 }
 
 // Public APIs (no auth required)
@@ -94,6 +113,13 @@ export const adminApi = {
   // Posts (subsection-based endpoints)
   getPosts: (subsectionSlug: string) =>
     fetcher(`/api/admin/subsections/${subsectionSlug}/posts`),
+
+  /* Single authenticated post list (checkpoint 6 of docs/admin-redesign-plan.md). This replaces
+     the `PostsManager` fan-out, which issued one request per subsection and turned every failed
+     request into an empty list; filtering and paging are query parameters now. */
+  listPosts: (filters: PostListRequest = {}) =>
+    fetcher(withQuery('/api/admin/posts', buildPostListSearchParams(filters))),
+
   createPost: (subsectionSlug: string, data: any) =>
     fetcher(`/api/admin/subsections/${subsectionSlug}/posts`, {
       method: 'POST',
@@ -127,6 +153,13 @@ export const adminApi = {
   deletePostBySlug: (postSlug: string) =>
     fetcher(`/api/admin/posts/${postSlug}`, {
       method: 'DELETE',
+    }),
+
+  // Image upload (profile picture and post covers; the route wraps Cloudinary)
+  uploadImage: (image: string) =>
+    fetcher('/api/admin/upload', {
+      method: 'POST',
+      body: JSON.stringify({ image }),
     }),
 
   // Tags

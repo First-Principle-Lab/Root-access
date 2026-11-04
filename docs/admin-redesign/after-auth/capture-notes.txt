@@ -1,0 +1,15 @@
+Auth screens after the PR review correction. Captured from a production build at
+1440 x 900 and 375 x 844, in dark and light modes. The `site-theme` preference was
+set before navigation. Signup eligibility was mocked to `allowSignup: true` for
+screenshots because the connected database already has an admin account; no account
+was created.
+
+Both routes use AdminAuthShell, AdminField, AdminInput, AdminButton and Notice.
+They share the admin tokens with the authenticated screens and expose the existing
+theme switcher and a link back to the public site. The light card is now light and
+the dark card is dark. No horizontal overflow was observed at either width.
+
+Browser assertions are in tests/e2e/admin-auth-theme.spec.ts: both themes, both
+widths, control labels, error announcement, retained input after failed requests,
+and aria-describedby links to the error notice. The production build, TypeScript
+and focused lint checks pass on the updated tree.

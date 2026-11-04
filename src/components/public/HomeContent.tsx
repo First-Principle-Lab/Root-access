@@ -13,6 +13,7 @@ interface Profile {
   xLink: string | null;
   instagramLink: string | null;
   linkedinLink: string | null;
+  githubLink: string | null;
   email: string | null;
   resumeUrl: string | null;
   profilePicture: string | null;

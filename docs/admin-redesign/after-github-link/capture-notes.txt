@@ -1,0 +1,12 @@
+cp7-profile-social-group-1440-dark.png  overflow=0 h1="Profile" bytes=58053  Social links group: GitHub, X, LinkedIn, Instagram as one grid, GitHub prefilled from the profile row
+cp7-profile-invalid-1440-dark.png  overflow=0 h1="Profile" bytes=59365  aria-invalid GitHub field with its own inline message and the form-level notice; no PATCH was sent
+cp7-public-home-socials-1440-dark.png  overflow=0 h1="Parth Thirwani" bytes=117875  public GitHub href="https://github.com/parththirwani" sidebar href="https://github.com/parththirwani" (read from Profile.githubLink, not markup)
+cp7-profile-social-group-375-dark.png  overflow=0 h1="Profile" bytes=35163  Social links group: GitHub, X, LinkedIn, Instagram as one grid, GitHub prefilled from the profile row
+cp7-profile-invalid-375-dark.png  overflow=0 h1="Profile" bytes=37422  aria-invalid GitHub field with its own inline message and the form-level notice; no PATCH was sent
+cp7-public-home-socials-375-dark.png  overflow=0 h1="Parth Thirwani" bytes=47524  public GitHub href="https://github.com/parththirwani" sidebar href="https://github.com/parththirwani" (read from Profile.githubLink, not markup)
+cp7-profile-social-group-1440-light.png  overflow=0 h1="Profile" bytes=58582  Social links group: GitHub, X, LinkedIn, Instagram as one grid, GitHub prefilled from the profile row
+cp7-profile-invalid-1440-light.png  overflow=0 h1="Profile" bytes=59789  aria-invalid GitHub field with its own inline message and the form-level notice; no PATCH was sent
+cp7-public-home-socials-1440-light.png  overflow=0 h1="Parth Thirwani" bytes=122639  public GitHub href="https://github.com/parththirwani" sidebar href="https://github.com/parththirwani" (read from Profile.githubLink, not markup)
+cp7-profile-social-group-375-light.png  overflow=0 h1="Profile" bytes=35572  Social links group: GitHub, X, LinkedIn, Instagram as one grid, GitHub prefilled from the profile row
+cp7-profile-invalid-375-light.png  overflow=0 h1="Profile" bytes=37888  aria-invalid GitHub field with its own inline message and the form-level notice; no PATCH was sent
+cp7-public-home-socials-375-light.png  overflow=0 h1="Parth Thirwani" bytes=48116  public GitHub href="https://github.com/parththirwani" sidebar href="https://github.com/parththirwani" (read from Profile.githubLink, not markup)
