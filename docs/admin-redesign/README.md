@@ -1007,9 +1007,12 @@ finding, not a capture bug).
 - **Image upload success** (profile picture and post cover): there are no Cloudinary credentials in
   this environment, so the success path cannot be evidenced at all. Its failure path is proven
   twice, and both times the form keeps what was typed.
-- **`/admin/login` and `/admin/signup` in the light theme**: they still render their own
-  `bg-[#0a0a0a]` card outside `.admin-shell` (the pre-existing exception carried in section 7), so
-  `after-auth/`'s dark and light pairs are identical. Converting them is a styling pass that no
+- **The `/admin/login` and `/admin/signup` card in the light theme**: after the merge with `dev`
+  these routes are inside the single `.admin-shell` (README 4.12), so the token scope reaches them -
+  the shell itself now paints `rgb(5, 5, 5)` / `rgb(255, 255, 255)` behind the card and the card's
+  text renders in the admin's Inter. The card keeps its own hard-coded `bg-[#0a0a0a]` and
+  `text-white`, and it covers the viewport, so `after-auth/`'s dark and light pairs are still
+  byte-identical (15033 and 10499 bytes). Re-colouring the card itself is a styling pass that no
   acceptance row depends on; it is not done and not claimed.
 - **Screen-reader output**: no AT is installed, so "screen reader support" is evidenced by
   `aria-current`, `aria-expanded`, `aria-modal`, accessible names and focus restoration, not by
@@ -1045,6 +1048,65 @@ back), and the seeded counts are read from the endpoints rather than hard-coded.
 
 The seven deliverables of `docs/admin-redesign-plan.md:11-19`, mapped to the files that carry them,
 is in [`pr-summary.md`](pr-summary.md); it is the body of the pull request against `dev`.
+The merge with `dev` that happened after this section was written, and the single-shell fix it
+required, are in 4.12 below.
+
+### 4.12 Merge with `dev` and the `.admin-shell` collision (correction checkpoint C11)
+
+The exit gate failed on the **merged result**, not on this branch: `dev` had moved to `5cabc81`
+(PR #1 `fix/admin-cursor-pointer`, which wrapped every `/admin` route in `<div className="admin-shell">`
+in `src/app/admin/layout.tsx` and put the admin cursor rules in `src/app/globals.css`), while this
+branch put the same class on the root of `AdminLayout`. GitHub still reported `mergeable: true`, so
+nothing but running the suite on the merge result would show it: **`npx playwright test` = 17 failed /
+66 passed**, every failure a `strict mode violation: resolved to 2 elements` on `locator('.admin-shell')`
+(16 shell specs plus the WCAG contrast test) - `/tmp/cora/merge-pw.log`.
+
+#### What was done
+
+| C11 requirement | Change | Proof |
+| --- | --- | --- |
+| Forward merge only | `git merge --no-ff origin/dev` -> merge commit `0d78086`; no rebase, no force-push, `dev` and `main` untouched, the PR never merged by us | `git log --graph -4`, `git ls-remote origin refs/heads/feat/admin-redesign-run` |
+| Exactly one `.admin-shell` per admin page, route layout preferred | Kept dev's wrapper as the single element (`src/app/admin/layout.tsx:7`) and dropped the duplicate class from `AdminLayout` (`src/components/admin/adminLayout.tsx:77` is now `admin-layout min-h-screen`; the `min-h-screen`/background it carried is already what `@layer base .admin-shell` does, so nothing was lost). `src/components/admin/dashboard/adminDashboard.tsx:159` is **not** a second shell - `max-w-[var(--admin-shell-max)]` is the layout token's *name*, not the class | `tests/e2e/admin-shell-scope.spec.ts` "every authenticated admin route renders one and only one .admin-shell" over 7 routes: `toHaveCount(1)` plus `document.querySelectorAll('.admin-shell .admin-shell').length === 0`. Whole-tree check: `grep -rn admin-shell src --include=*.tsx` returns exactly one `className` |
+| PR #1's cursor behaviour kept, and admin styling not split across two scopes | The cursor block was moved **verbatim** (22 selectors) out of `src/app/globals.css` into `src/app/admin/admin.css:180-209`, where every other admin rule lives. It stays unlayered, as on dev, so a control cannot lose its pointer by carrying a utility. Consequence worth naming: with that removal `src/app/globals.css` is byte-identical to the branch base again (`git diff --stat cd65d5d -- src/app/globals.css` is empty), so the PR now contains **no public CSS edit at all** | `admin-shell-scope.spec.ts`: a native `select` (which has no cursor utility of its own) computes `pointer`; the legacy `button[type=submit]` on `/admin/login` computes `pointer`; an `input[type=file]` computes `pointer`; a disabled control computes `not-allowed` |
+| `/admin/login` and `/admin/signup` still receive the token scope | They get it from the route layout rather than from `AdminLayout` (which they never rendered). This is a real, small visual change and is recorded as such: the shell behind the card now paints `rgb(5, 5, 5)` / `rgb(255, 255, 255)` and the card's text renders in the admin's Inter instead of the body's `ui-sans-serif`; the card's own `bg-[#0a0a0a]` / `text-white` utilities still win, so the dark and light captures stay byte-identical | `admin-shell-scope.spec.ts`: `/admin/login` has one shell, `--admin-bg` resolves, shell `background-color: rgb(5, 5, 5)` and `color: rgb(187, 187, 187)`; `/admin/signup` -> `/admin/login` with one shell. `after-auth/` re-captured on the merged tree (`shells=1`, `submitCursor=pointer`, 15033 / 10499 bytes) |
+
+#### Merged-tree verification (every command re-run on the merged tree)
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `npm run build` | exit 0, 39 static pages (run twice: once after the merge, once cold after `rm -rf .next`) | `admin-run-iter13/build-merged.log`, `build-merged-cold.log` |
+| `npx tsc --noEmit` | exit 0 | `admin-run-iter13/tsc-merged.log` |
+| `npx vitest run` | exit 0, 118 passed / 13 files | `admin-run-iter13/vitest-merged.log` |
+| `npx playwright test` | **exit 0, 90 passed in 3.3m, 0 failed** (was 17 failed / 66 passed on the same merged tree before the fix; 83 + the 7 new shell-scope tests) | `admin-run-iter13/playwright-full-merged.log` |
+| `npx eslint .` | 34 errors / 20 warnings, unchanged from the pre-merge record and inside the 48/24 budget; `src/app/admin/layout.tsx`, `src/components/admin/adminLayout.tsx` and `tests/e2e/admin-shell-scope.spec.ts` are all 0/0 | `admin-run-iter13/eslint-merged.json` |
+| `npx prisma migrate status` | 15 migrations found, "Database schema is up to date!" | `admin-run-iter13/migrate-status-merged.log` |
+| `git diff --stat dc23de5..HEAD` | the merge touches only `src/app/admin/layout.tsx` and `src/app/globals.css`; the fix on top touches those two plus `adminLayout.tsx`, `admin.css`, one new spec and the docs | `admin-run-iter13/git-diff-stat.log` |
+
+#### Public regression sweep re-run on the merged tree
+
+`admin-run-iter12/public-status.sh` (24 routes + 14 content markers, no database access) against the
+cold merged build on `:3099`, port-normalised diff against the recorded base `cd65d5d` sweep:
+**empty** - `gate-public-status-MERGED.txt` vs `gate-public-status-BEFORE.txt`, every HTTP code and
+marker identical. The first run of this sweep showed one difference, `/scratch/hidden-scratch-note`
+200 instead of 404; it was **not** a code change but the on-disk ISR cache
+(`.next/server/app/scratch/hidden-scratch-note.html`) left by the acceptance spec's subsection
+visibility lifecycle, which un-hides, requests and re-hides that route in one sitting. A cold build +
+cold server + re-seed answers 404, and the database says the subsection is hidden and that post
+unpublished. The gate record's ordering (sweep before the suites) is what kept iteration 12 clean, and
+any future gate run must keep that order.
+
+`admin-run-iter13/gate-auth-roundtrip.sh` (the same script as the gate) on the merged build is
+identical to the base transcript except the one intended admin-only difference already named in the
+gate record: `GET /api/admin/stats` returns the extended `{sections, hiddenSections, subsections,
+hiddenSubsections, published, drafts, totalPosts, tags}` shape (`gate-auth-MERGED.txt`).
+
+Visual parity of the shell refactor, measured rather than asserted: `/admin/sections` at
+1440x900 dark, 1440x900 light and 375x844 dark is **0 differing pixels** against the committed
+pre-merge captures (`after-screens/cp5-sections-*`), so moving the class and the cursor rules changed
+nothing on a converted screen (`admin-run-iter13/merged-visual-parity.mjs`, `shots/capture-notes.txt`).
+`/admin/login` differs from its pre-merge capture by 3760 px (0.29%), entirely inside the card, and is
+the Inter substitution described in the table above; the profile row in that run is not comparable
+because its reference predates the `githubLink` field.
 
 ## 5. Where admin density needs more width and stronger action hierarchy
 
@@ -1119,8 +1181,10 @@ these PNGs.
   integration (§4.7) is the only public diff: one added line in each of the three profile reads and
   one changed `href` in each of `src/components/public/SocialLinks.tsx` and `Sidebar.tsx`.
 - Still open inside the shell checkpoint, deliberately deferred: `/admin/login` and
-  `/admin/signup` keep their legacy card (no `.admin-shell`, so they remain theme-dead)
-  and are converted in the auth-screen pass, and the shell offers "Log out" in both the
+  `/admin/signup` keep their legacy hard-coded card *inside* the shell (the shell scope reaches them
+  since the merge in README 4.12, but the card's own `bg-[#0a0a0a]` / `text-white` utilities still
+  win over it, so they stay theme-dead) and are converted in the auth-screen pass, and the shell
+  offers "Log out" in both the
   top bar and the sidebar/drawer, which the checkpoint-4 button primitive will
   de-duplicate. `FullScreenLoader` still paints outside the shell with its own dark
   hexes until the checkpoint-4 loading state lands.

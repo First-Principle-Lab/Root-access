@@ -177,6 +177,37 @@ html.dark body:has(.admin-shell) {
   outline-offset: var(--admin-ring-offset);
 }
 
+/* Control cursors. Tailwind v4 preflight keeps `appearance: button` but gives buttons no
+   cursor, so every admin control rendered the default arrow; PR #1 (dev@6be9daa) fixed that with
+   these exact rules in src/app/globals.css. They live here instead because this file is the only
+   place admin chrome is styled: the single `.admin-shell` element is rendered by
+   src/app/admin/layout.tsx, the same module that imports this stylesheet, so every admin route
+   (including /admin/login and /admin/signup, which do not use AdminLayout) gets them, and
+   src/app/globals.css is left holding only public `.site-shell` selectors. They stay unlayered,
+   exactly as on dev, so a control cannot lose its pointer by carrying a utility class. */
+.admin-shell button,
+.admin-shell [role="button"],
+.admin-shell input[type="button"],
+.admin-shell input[type="submit"],
+.admin-shell input[type="reset"],
+.admin-shell input[type="file"],
+.admin-shell input[type="checkbox"],
+.admin-shell input[type="radio"],
+.admin-shell select,
+.admin-shell summary,
+.admin-shell label:has(input[type="checkbox"]),
+.admin-shell label:has(input[type="radio"]) { cursor: pointer; }
+/* Disabled controls stay visibly non-interactive. */
+.admin-shell button:disabled,
+.admin-shell [role="button"][aria-disabled="true"],
+.admin-shell input[type="button"]:disabled,
+.admin-shell input[type="submit"]:disabled,
+.admin-shell input[type="reset"]:disabled,
+.admin-shell input[type="file"]:disabled,
+.admin-shell input[type="checkbox"]:disabled,
+.admin-shell input[type="radio"]:disabled,
+.admin-shell select:disabled { cursor: not-allowed; }
+
 @media (max-width: 849px) {
   body:has(.admin-shell) { --admin-gutter: 16px; --admin-panel-pad: 16px; }
 }

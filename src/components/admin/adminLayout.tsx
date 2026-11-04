@@ -69,8 +69,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     return null;
   }
 
+  // The token/cursor scope itself is the single `.admin-shell` element rendered by
+  // src/app/admin/layout.tsx (the route-level layout, which also covers /admin/login and
+  // /admin/signup); this div is only the authenticated chrome inside it, so it must not
+  // repeat that class or every admin page would nest two shells.
   return (
-    <div className="admin-shell min-h-screen bg-[color:var(--admin-bg)]">
+    <div className="admin-layout min-h-screen">
       <a
         href="#admin-main"
         className="fixed left-2 top-2 z-[60] rounded-[var(--admin-radius-control)] bg-[color:var(--admin-surface)] px-[var(--admin-space-3)] py-2 text-[length:var(--admin-text-meta)] text-[color:var(--admin-heading)] shadow-[var(--admin-shadow-drawer)] [-webkit-transform:translateY(-200%)] [transform:translateY(-200%)] focus:[-webkit-transform:none] focus:[transform:none]"

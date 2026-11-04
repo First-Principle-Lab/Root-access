@@ -2,8 +2,9 @@
 
 Deliverables are the seven rows of `docs/admin-redesign-plan.md:11-19`; each is mapped to the files
 that carry it, with the tests and screenshots that prove it. Design rationale and the measured
-verification tables are in [`README.md`](README.md) (sections 4.1-4.10); the acceptance run record is
-[README 4.10](README.md#410-acceptance-run-record-checkpoint-10).
+verification tables are in [`README.md`](README.md) (sections 4.1-4.12); the acceptance run record is
+[README 4.10](README.md#410-acceptance-run-record-checkpoint-10) and the merge with `dev` plus the
+single-shell fix it required is [README 4.12](README.md#412-merge-with-dev-and-the-admin-shell-collision-correction-checkpoint-c11).
 
 ## 1. Admin design system
 
@@ -14,7 +15,9 @@ verification tables are in [`README.md`](README.md) (sections 4.1-4.10); the acc
   `html.dark body:has(.admin-shell)`, reusing the public palette from `src/app/globals.css:240-269`.
   Flat surfaces only - the public generative/tree background is deliberately not carried in. It also
   owns the one unlayered `:focus-visible` rule and the `.admin-md-preview` re-colouring.
-- `src/app/admin/layout.tsx` - imports the stylesheet once, so it loads on `/admin` only.
+- `src/app/admin/layout.tsx` - imports the stylesheet once, so it loads on `/admin` only, and renders
+  the single `.admin-shell` element that scopes every admin route including `/admin/login` and
+  `/admin/signup` (that wrapper came from `dev` PR #1 in the merge described below; see README 4.12).
 - `src/components/admin/adminLayout.tsx` - the first consumer; its ten hard-coded hex values became
   token utilities.
 - Proof: README 4.1 (9-row measured verification table, hard-coded colour census 304 -> 39 literals
@@ -27,7 +30,8 @@ verification tables are in [`README.md`](README.md) (sections 4.1-4.10); the acc
   with `aria-current="page"`, an ordinary `target="_blank" rel="noopener noreferrer"` "View site"
   link, logout, the existing `next-themes` `ThemeToggleButton`, and the current location as
   `data-admin-location`.
-- `src/components/admin/adminLayout.tsx` - composes the shell: drawer + scrim with `aria-expanded` /
+- `src/components/admin/adminLayout.tsx` - composes the shell (`admin-layout`, deliberately not a
+  second `.admin-shell`): drawer + scrim with `aria-expanded` /
   `aria-controls` / `role="dialog"`, body scroll lock, skip link to a focusable `main#admin-main`,
   stacking `top bar > drawer > scrim > sidebar`, auth redirect and `adminApi.logout()` preserved.
 - `src/hooks/useFocusTrap.ts` (new) - Escape, two-way Tab containment with `preventDefault` on every
@@ -105,8 +109,8 @@ verification tables are in [`README.md`](README.md) (sections 4.1-4.10); the acc
 
 ## 7. Verification package
 
-- `tests/unit/` (9 files, 94 tests), `tests/integration/` (4 files, 24 tests), `tests/e2e/` (8 files,
-  83 browser tests) plus `tests/e2e/helpers/adminAuth.ts` and `tests/integration/helpers/session.ts`,
+- `tests/unit/` (9 files, 94 tests), `tests/integration/` (4 files, 24 tests), `tests/e2e/` (9 files,
+  90 browser tests) plus `tests/e2e/helpers/adminAuth.ts` and `tests/integration/helpers/session.ts`,
   `vitest.config.ts`, `playwright.config.ts`, and `test` / `test:unit` / `test:e2e` scripts in
   `package.json`. Coverage map: README 4.8.
 - `tests/e2e/admin-acceptance.spec.ts` (new, 12 tests) is the acceptance table: route protection and
@@ -117,6 +121,28 @@ verification tables are in [`README.md`](README.md) (sections 4.1-4.10); the acc
   `after-controls/` 24, `after-screens/` 48, `after-editor/` 22, `after-github-link/` 12,
   `after-auth/` 4.
 - Written spec and run records: README sections 1-7.
+
+## 8. Merge with `dev` (PR #1) and the single `.admin-shell`
+
+The branch was merged forward into `origin/dev@5cabc81` (which had taken PR #1,
+`fix/admin-cursor-pointer`) with an ordinary merge commit - no rebase, no force-push. PR #1 added a
+route-level `.admin-shell` wrapper and the admin cursor rules in `src/app/globals.css`; this branch
+already used that class inside `AdminLayout`, so the merged DOM had two nested shells and 17 browser
+tests failed on `locator('.admin-shell')` resolving to 2 elements even though GitHub reported the PR
+`mergeable`. Resolution, verified in `tests/e2e/admin-shell-scope.spec.ts` (7 tests):
+
+- the route layout keeps the single `.admin-shell` (so the token scope still covers
+  `/admin/login` / `/admin/signup`), and `AdminLayout`'s root is now `admin-layout`;
+- PR #1's cursor rules move verbatim to `src/app/admin/admin.css`, where the rest of the admin chrome
+  is styled, which leaves `src/app/globals.css` byte-identical to the branch base - this PR contains
+  no public CSS edit at all;
+- the whole gate is re-run on the merged tree: build 0 (39 pages), `tsc` 0, `vitest` 118/118,
+  `playwright` 90/90 in 3.3m, `eslint` 34 errors / 20 warnings with 0 problems on the touched files,
+  `prisma migrate status` clean, and the public 24-route sweep plus the auth round trip identical to
+  the recorded baseline (one intended admin-only `stats` difference already named below).
+
+Details, measurements and the two false positives that had to be explained (a stale on-disk ISR cache
+answer for a hidden post, and a 0.29% font difference on `/admin/login`) are in README 4.12.
 
 ## Migration and rollback
 
@@ -135,9 +161,11 @@ verification tables are in [`README.md`](README.md) (sections 4.1-4.10); the acc
 1. **No Cloudinary credentials in this environment.** The image-upload *success* path (profile
    picture, post cover) cannot be evidenced; the failure path is (visible actionable error, input
    retained, nothing stored) - `admin-failure-paths.spec.ts` and `admin-post-editor.spec.ts`.
-2. **`/admin/login` and `/admin/signup` are still outside `.admin-shell`.** They keep their
-   pre-redesign card and therefore ignore the light theme; `after-auth/`'s dark and light files are
-   byte-identical, which is the measurement, not a capture bug. No acceptance row depends on them.
+2. **The `/admin/login` and `/admin/signup` card is still pre-redesign styling.** Since the merge they
+   sit *inside* the single `.admin-shell` and so inherit its tokens (background, Inter, the pointer
+   cursor), but the card keeps hard-coded `bg-[#0a0a0a]` / `text-white` utilities that win over the
+   base layer and fill the viewport, so `after-auth/`'s dark and light files stay byte-identical -
+   which is the measurement, not a capture bug. No acceptance row depends on them.
 3. **No assistive technology is installed**, so screen-reader support is asserted through ARIA
    semantics, accessible names and focus restoration rather than by listening to a reader.
 4. **Public pages are ISR (`revalidate = 60`, `stale-while-revalidate = 31535940`) and that is
