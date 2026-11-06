@@ -1,19 +1,28 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { MagnifyingGlassIcon, PlusIcon } from '@phosphor-icons/react';
+import { CaretLeftIcon, CaretRightIcon, MagnifyingGlassIcon, PlusIcon } from '@phosphor-icons/react';
 import { adminApi, requestFailureMessage } from '@/src/lib/api';
-import { buildPostListPageItems, isPostFilterActive, type PostListRequest } from '@/src/lib/postFilters';
-import type { PostListItem, PostListResponse, TopCategory } from '@/src/types';
+import { setAdminQueryData, useAdminQuery } from '@/src/lib/adminQuery';
+import { adminQueryKeys, invalidateAfter, loadPosts, loadSections, loadStats } from '@/src/lib/adminQueries';
+import {
+  buildPostListPageItems,
+  buildPostListSearchParams,
+  isPostFilterActive,
+  type PostListRequest,
+} from '@/src/lib/postFilters';
+import type { PostListItem, PostListResponse } from '@/src/types';
 import { AdminButton, adminButtonClass } from '@/src/components/ui/admin-button';
-import { AdminField, AdminInput, AdminSelect } from '@/src/components/ui/admin-field';
-import { AdminFilterBar } from '@/src/components/ui/admin-filter-bar';
-import { AdminEmptyState, AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-state';
+import { AdminInput, AdminSelect } from '@/src/components/ui/admin-field';
+import { AdminEmptyState, AdminErrorState } from '@/src/components/ui/admin-state';
 import { ConfirmDialog } from '@/src/components/ui/confirm-dialog';
 import { Notice } from '@/src/components/ui/notice';
 import { PageHeader } from '@/src/components/ui/page-header';
+import { Skeleton } from '@/src/components/ui/skeleton';
 import { NEW_POST_PATH } from '@/src/lib/postEditor';
+import { cn } from '@/src/lib/cn';
 import { PostListItemRow } from './postListItem';
 
 /** What the filter row controls. `page` resets to 1 whenever anything else changes. */
@@ -33,221 +42,196 @@ const EMPTY_POST_FILTERS: PostFilterState = {
   page: 1,
 };
 
-/* Ten rows fits a 1440x900 screen without scrolling past the fold and makes the seeded 17 posts
-   two pages, so pagination is exercised by the real data rather than by a fixture. */
 const PAGE_SIZE = 10;
 
 const LIST_FAILURE =
   'The posts could not be loaded. Your search and filters are fine - the request to the server failed.';
 
-/* Posts screen (checkpoints 5 and 6 of docs/admin-redesign-plan.md).
-   The baseline fetched the sections list and then one request per subsection
-   (`allSubsections.map(sub => adminApi.getPosts(sub.slug).catch(() => ({ posts: [] })))`), so nine
-   round trips built one list and any failed request looked like an empty subsection. It is now one
-   authenticated list request (src/app/api/admin/posts/route.ts) whose filtering, ordering and
-   paging happen on the server; the sections request that remains only fills the subsection filter
-   and the create form. A failed list is an error state with a retry, never an empty list. */
+/* The filters live in the address, so a reload or a shared link lands on the same list and the
+   dashboard can link straight to the drafts. */
+function filtersFromParams(params: URLSearchParams): PostFilterState {
+  const status = params.get('status');
+  const sort = params.get('sort');
+  const page = Number(params.get('page'));
+  return {
+    search: params.get('search') ?? '',
+    status: status === 'published' || status === 'draft' ? status : 'all',
+    subsection: params.get('subsection') ?? '',
+    sort: sort === 'created' || sort === 'title' ? sort : 'updated',
+    page: Number.isInteger(page) && page > 1 ? page : 1,
+  };
+}
+
 export function PostsManager() {
-  const [sections, setSections] = useState<TopCategory[]>([]);
-  const [filters, setFilters] = useState<PostFilterState>(EMPTY_POST_FILTERS);
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<PostFilterState>(() => filtersFromParams(searchParams));
   /* The search box is typed into immediately but only reaches the request after a pause, so one
      keystroke does not mean one round trip. */
-  const [searchDraft, setSearchDraft] = useState('');
+  const [searchDraft, setSearchDraft] = useState(filters.search);
 
-  const [posts, setPosts] = useState<PostListItem[]>([]);
-  const [pageInfo, setPageInfo] = useState({ page: 1, totalPages: 1, total: 0, hasNextPage: false, hasPreviousPage: false });
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-  const [reloadToken, setReloadToken] = useState(0);
-  /* "Now" for the rows' relative dates, captured once per list load: `Date.now()` during render is
-     impure (react-hooks/purity) and per-row would give every row a different timestamp. */
-  const [listedAt, setListedAt] = useState<number | null>(null);
+  const request = useMemo<PostListRequest>(() => ({ ...filters, limit: PAGE_SIZE }), [filters]);
+  const listKey = adminQueryKeys.posts(request);
+  const list = useAdminQuery(listKey, () => loadPosts(request));
+  const sectionsQuery = useAdminQuery(adminQueryKeys.sections, loadSections);
+  const stats = useAdminQuery(adminQueryKeys.stats, loadStats);
+  const sections = sectionsQuery.data ?? [];
+
+  /* While a new page or filter loads, keep the last list on screen (dimmed) instead of swapping
+     it for a spinner, so the page does not jump on every click. */
+  const [shown, setShown] = useState<PostListResponse | undefined>(list.data);
+  if (list.data && list.data !== shown) setShown(list.data);
+  const listing = list.data ?? shown;
+  const switching = !list.data && Boolean(shown);
+  const [listedAt] = useState(() => Date.now());
 
   const [pendingDelete, setPendingDelete] = useState<PostListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [busySlug, setBusySlug] = useState('');
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const res = (await adminApi.getSections()) as { sections: TopCategory[] };
-        if (active) setSections(res.sections);
-      } catch (err) {
-        /* The list itself still loads; only the subsection filter is degraded, and saying so is
-           better than an empty select that implies the site has no subsections. */
-        if (active) {
-          setSections([]);
-          setActionError(
-            `Subsections could not be listed, so the subsection filter is empty. ${requestFailureMessage(err, 'The request failed.')}`,
-          );
-        }
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  /* The sections tree only fills the subsection filter below (grouped by section); the posts
-     themselves come from the single list endpoint. */
-
-  // Only the committed filters decide the request, and the object identity changes with them.
-  const request = useMemo<PostListRequest>(
-    () => ({ ...filters, limit: PAGE_SIZE }),
-    [filters],
-  );
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setLoadError('');
-    (async () => {
-      try {
-        const res = (await adminApi.listPosts(request)) as PostListResponse;
-        if (!active) return;
-        setPosts(res.posts);
-        setListedAt(Date.now());
-        setPageInfo({
-          page: res.page,
-          totalPages: res.totalPages,
-          total: res.total,
-          hasNextPage: res.hasNextPage,
-          hasPreviousPage: res.hasPreviousPage,
-        });
-      } catch (err) {
-        if (!active) return;
-        setPosts([]);
-        setLoadError(requestFailureMessage(err, LIST_FAILURE));
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [request, reloadToken]);
+    const query = buildPostListSearchParams({ ...filters, limit: undefined }).toString();
+    const next = query ? `/admin/posts?${query}` : '/admin/posts';
+    if (`${window.location.pathname}${window.location.search}` !== next) {
+      window.history.replaceState(window.history.state, '', next);
+    }
+  }, [filters]);
 
   useEffect(() => {
     if (searchDraft === filters.search) return;
-    const timer = setTimeout(() => setFilters((current) => ({ ...current, page: 1, search: searchDraft })), 300);
+    const timer = setTimeout(() => setFilters((current) => ({ ...current, page: 1, search: searchDraft })), 250);
     return () => clearTimeout(timer);
   }, [searchDraft, filters.search]);
 
   const changeFilters = (patch: Partial<PostFilterState>) =>
     setFilters((current) => ({ ...current, page: 1, ...patch }));
 
-  const filtersActive = isPostFilterActive(filters);
-  const pageItems = buildPostListPageItems(pageInfo.page, pageInfo.totalPages);
+  const clearFilters = () => {
+    setSearchDraft('');
+    setFilters((current) => ({ ...EMPTY_POST_FILTERS, sort: current.sort }));
+  };
 
-  const reloadList = () => setReloadToken((token) => token + 1);
+  const filtersActive = isPostFilterActive(filters);
+  const total = listing?.total ?? 0;
+  const pageItems = buildPostListPageItems(listing?.page ?? 1, listing?.totalPages ?? 1);
+
+  const patchRow = (id: string, patch: Partial<PostListItem>) =>
+    setAdminQueryData<PostListResponse>(listKey, (current) =>
+      current && { ...current, posts: current.posts.map((row) => (row.id === id ? { ...row, ...patch } : row)) },
+    );
 
   const handleTogglePublish = async (post: PostListItem) => {
     setActionError('');
     setNotice('');
-    setBusySlug(post.slug);
+    // Flip the row now; the server's answer follows a moment later.
+    patchRow(post.id, { published: !post.published });
     try {
       await adminApi.togglePublish(post.subsection.slug, post.slug, !post.published);
-      setNotice(
-        post.published
-          ? `“${post.title}” is no longer on the public site.`
-          : `“${post.title}” is live on the public site.`,
-      );
-      reloadList();
+      setNotice(post.published ? `“${post.title}” was unpublished.` : `“${post.title}” is live.`);
     } catch (err) {
-      // Reported where it happened instead of in a modal that blocks the list (the
-      // baseline used window.alert, PostsManager.tsx:155 in the pre-change tree).
+      patchRow(post.id, { published: post.published });
       setActionError(
         `“${post.title}” is still ${post.published ? 'published' : 'a draft'}. ${requestFailureMessage(err, 'The request failed.')}`,
       );
     } finally {
-      setBusySlug('');
+      invalidateAfter.post();
     }
   };
 
   const handleDelete = async () => {
     if (!pendingDelete) return;
+    const post = pendingDelete;
     setDeleting(true);
     setActionError('');
     try {
-      await adminApi.deletePost(pendingDelete.subsection.slug, pendingDelete.slug);
-      const title = pendingDelete.title;
-      setPendingDelete(null);
-      setNotice(`“${title}” was deleted.`);
-      reloadList();
-    } catch (err) {
-      setActionError(
-        `“${pendingDelete.title}” was not deleted. ${requestFailureMessage(err, 'The request failed.')}`,
+      await adminApi.deletePost(post.subsection.slug, post.slug);
+      setAdminQueryData<PostListResponse>(listKey, (current) =>
+        current && { ...current, total: current.total - 1, posts: current.posts.filter((row) => row.id !== post.id) },
       );
-      setPendingDelete(null);
+      setNotice(`“${post.title}” was deleted.`);
+    } catch (err) {
+      setActionError(`“${post.title}” was not deleted. ${requestFailureMessage(err, 'The request failed.')}`);
     } finally {
+      setPendingDelete(null);
       setDeleting(false);
+      invalidateAfter.post();
     }
   };
 
+  const statusTabs: { value: PostFilterState['status']; label: string; count?: number }[] = [
+    { value: 'all', label: 'All', count: stats.data?.totalPosts },
+    { value: 'published', label: 'Published', count: stats.data?.published },
+    { value: 'draft', label: 'Drafts', count: stats.data?.drafts },
+  ];
+
   const listBody = () => {
-    if (loading) return <AdminLoadingState label="Loading posts" />;
-    if (loadError) {
+    if (!listing && list.error !== undefined) {
       return (
         <AdminErrorState
-          message={loadError}
-          onRetry={reloadList}
-          retryLabel="Try again"
+          message={requestFailureMessage(list.error, LIST_FAILURE)}
+          onRetry={() => void list.refresh()}
           title="Posts could not be loaded"
         />
       );
     }
-    if (posts.length === 0) {
+    if (!listing) {
+      return (
+        <ul aria-busy="true" aria-label="Loading posts" className="border-t border-[color:var(--admin-border)]">
+          {Array.from({ length: 8 }, (_, index) => (
+            <li className="flex items-center gap-[var(--admin-space-3)] border-b border-[color:var(--admin-border)] px-[var(--admin-space-2)] py-[14px]" key={index}>
+              <Skeleton className="size-2 rounded-full" />
+              <Skeleton className="h-4 max-w-[340px] flex-1" />
+              <Skeleton className="ml-auto h-3 w-24" />
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    if (listing.posts.length === 0) {
       return filtersActive ? (
         <AdminEmptyState
-          description="Nothing matches the current search and filters. Clear them to see every post again."
-          icon={MagnifyingGlassIcon}
-          title="No posts match these filters"
           action={
-            <AdminButton
-              onClick={() => {
-                setSearchDraft('');
-                setFilters(EMPTY_POST_FILTERS);
-              }}
-              size="sm"
-              variant="secondary"
-            >
+            <AdminButton onClick={clearFilters} size="sm" variant="secondary">
               Clear filters
             </AdminButton>
           }
+          description="Try a different search, or clear the filters to see every post."
+          icon={MagnifyingGlassIcon}
+          title="No posts match"
         />
       ) : (
         <AdminEmptyState
-          description="Nothing is published yet. The first post can be written here."
-          title="No posts yet"
           action={
             <Link className={adminButtonClass({ size: 'sm', variant: 'primary' })} href={NEW_POST_PATH}>
               <PlusIcon aria-hidden="true" className="size-4" />
               New post
             </Link>
           }
+          description="Write your first post. It stays a draft until you publish it."
+          title="No posts yet"
         />
       );
     }
 
     return (
       <ul
-        className="flex flex-col overflow-hidden rounded-[var(--admin-radius-panel)] border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)]"
+        aria-busy={switching || undefined}
+        className={cn(
+          'border-t border-[color:var(--admin-border)] transition-opacity duration-[var(--admin-motion-base)]',
+          switching && 'opacity-50',
+        )}
         data-slot="post-list"
       >
-        {posts.map((post) => (
+        {listing.posts.map((post) => (
           <PostListItemRow
-            busy={busySlug === post.slug}
             key={post.id}
+            now={listedAt}
             onDelete={() => {
               setActionError('');
               setNotice('');
               setPendingDelete(post);
             }}
             onTogglePublish={() => void handleTogglePublish(post)}
-            now={listedAt}
             post={post}
           />
         ))}
@@ -259,68 +243,78 @@ export function PostsManager() {
     <div>
       <PageHeader
         actions={
-          /* Create is the editor page too, so there is one writing surface instead of the
-             baseline's inline form plus modal. */
-          <Link className={adminButtonClass({ variant: 'primary' })} href={NEW_POST_PATH}>
-            <PlusIcon aria-hidden="true" className="size-4" />
+          <Link className={adminButtonClass({ className: 'max-[849px]:hidden', variant: 'primary', size: 'sm' })} href={NEW_POST_PATH}>
+            <PlusIcon aria-hidden="true" className="size-4" weight="bold" />
             New post
           </Link>
         }
-        description="Every post across the site, newest edited first. Nothing here is visible to readers until you publish it."
         title="Posts"
       />
 
       {actionError && (
-        <Notice
-          assertive
-          className="mb-[var(--admin-space-4)]"
-          onDismiss={() => setActionError('')}
-          tone="error"
-        >
+        <Notice assertive className="mb-[var(--admin-space-4)]" onDismiss={() => setActionError('')} tone="error">
           {actionError}
         </Notice>
       )}
-
       {notice && (
         <Notice className="mb-[var(--admin-space-4)]" onDismiss={() => setNotice('')} tone="success">
           {notice}
         </Notice>
       )}
+      {sectionsQuery.error !== undefined && !sectionsQuery.data && (
+        <Notice className="mb-[var(--admin-space-4)]" tone="warning">
+          Subsections could not be listed, so the subsection filter is empty.
+        </Notice>
+      )}
 
-      {/* Subsection filter */}
-      <AdminFilterBar
-        onClear={
-          filtersActive
-            ? () => {
-                setSearchDraft('');
-                setFilters(EMPTY_POST_FILTERS);
-              }
-            : undefined
-        }
-        result={`${pageInfo.total} ${pageInfo.total === 1 ? 'post' : 'posts'}`}
-      >
-        <AdminField className="min-w-[200px] max-w-[280px] flex-1" id="post-search" label="Search">
-          <AdminInput
-            onChange={(e) => setSearchDraft(e.target.value)}
-            placeholder="Title or summary"
-            type="search"
-            value={searchDraft}
-          />
-        </AdminField>
-        <AdminField className="min-w-[150px]" id="post-filter-status" label="Status">
+      <div className="mb-[var(--admin-space-3)] flex flex-wrap items-center gap-x-[var(--admin-space-4)] gap-y-[var(--admin-space-3)]" role="search">
+        <div aria-label="Status" className="flex items-center gap-px rounded-[var(--admin-radius-control)] bg-[color:var(--admin-surface-2)] p-[3px]" role="radiogroup">
+          {statusTabs.map((tab) => {
+            const active = filters.status === tab.value;
+            return (
+              <button
+                aria-checked={active}
+                className={cn(
+                  'flex h-[28px] items-center gap-[6px] rounded-[4px] px-[var(--admin-space-3)] text-[length:var(--admin-text-meta)] max-[849px]:h-9',
+                  active
+                    ? 'bg-[color:var(--admin-bg)] font-medium text-[color:var(--admin-heading)] shadow-[0_0_0_1px_var(--admin-border)]'
+                    : 'text-[color:var(--admin-muted)] hover:text-[color:var(--admin-heading)]',
+                )}
+                key={tab.value}
+                onClick={() => changeFilters({ status: tab.value })}
+                role="radio"
+                type="button"
+              >
+                {tab.label}
+                {tab.count !== undefined && (
+                  <span className="font-[family-name:var(--admin-font-mono)] text-[length:var(--admin-text-micro)] tabular-nums text-[color:var(--admin-subtle)]">
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-[var(--admin-space-2)] max-[599px]:w-full">
+          <label className="relative block max-[599px]:w-full">
+            <span className="sr-only">Search</span>
+            <MagnifyingGlassIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute left-[10px] top-1/2 size-4 -translate-y-1/2 text-[color:var(--admin-subtle)]"
+            />
+            <AdminInput
+              className="w-[240px] pl-[32px] text-[length:var(--admin-text-meta)] max-[599px]:w-full"
+              onChange={(e) => setSearchDraft(e.target.value)}
+              placeholder="Search posts"
+              type="search"
+              value={searchDraft}
+            />
+          </label>
+          {/* Optgroups carry the section -> subsection hierarchy into the filter itself. */}
           <AdminSelect
-            compact
-            onChange={(e) => changeFilters({ status: e.target.value as PostFilterState['status'] })}
-            value={filters.status}
-          >
-            <option value="all">All statuses</option>
-            <option value="published">Published</option>
-            <option value="draft">Drafts</option>
-          </AdminSelect>
-        </AdminField>
-        {/* Optgroups carry the section -> subsection hierarchy into the filter itself. */}
-        <AdminField className="min-w-[190px]" id="post-filter-subsection" label="Subsection">
-          <AdminSelect
+            aria-label="Subsection"
+            className="min-w-[160px]"
             compact
             onChange={(e) => changeFilters({ subsection: e.target.value })}
             value={filters.subsection}
@@ -336,9 +330,9 @@ export function PostsManager() {
               </optgroup>
             ))}
           </AdminSelect>
-        </AdminField>
-        <AdminField className="min-w-[170px]" id="post-sort" label="Order">
           <AdminSelect
+            aria-label="Order"
+            className="min-w-[150px]"
             compact
             onChange={(e) => changeFilters({ sort: e.target.value as PostFilterState['sort'] })}
             value={filters.sort}
@@ -347,65 +341,72 @@ export function PostsManager() {
             <option value="created">Newest first</option>
             <option value="title">Title A–Z</option>
           </AdminSelect>
-        </AdminField>
-      </AdminFilterBar>
+        </div>
+      </div>
 
-      {/* Posts List */}
+      <div className="mb-[var(--admin-space-2)] flex h-5 items-center gap-[var(--admin-space-3)] text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+        {listing && (
+          <span data-slot="admin-filter-result">
+            {total} {total === 1 ? 'post' : 'posts'}
+          </span>
+        )}
+        {filtersActive && (
+          <button className="underline underline-offset-4 hover:text-[color:var(--admin-heading)]" onClick={clearFilters} type="button">
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {listBody()}
 
-      {/* Page buttons, only when there is more than one page of results. */}
-      {!loading && !loadError && pageInfo.totalPages > 1 && (
+      {listing && listing.totalPages > 1 && (
         <nav
           aria-label="Posts pages"
-          className="mt-[var(--admin-space-5)] flex flex-wrap items-center gap-[var(--admin-space-2)]"
+          className="mt-[var(--admin-space-5)] flex flex-wrap items-center gap-[var(--admin-space-1)]"
           data-slot="post-list-pagination"
         >
           <AdminButton
-            disabled={!pageInfo.hasPreviousPage}
+            aria-label="Previous"
+            disabled={!listing.hasPreviousPage}
             onClick={() => setFilters((current) => ({ ...current, page: current.page - 1 }))}
-            size="sm"
-            variant="secondary"
+            size="icon-sm"
+            variant="ghost"
           >
-            Previous
+            <CaretLeftIcon aria-hidden="true" className="size-4" />
           </AdminButton>
           {pageItems.map((item, index) =>
             item === 'gap' ? (
-              <span
-                aria-hidden="true"
-                className="px-1 text-[length:var(--admin-text-meta)] text-[color:var(--admin-subtle)]"
-                key={`gap-${index}`}
-              >
+              <span aria-hidden="true" className="px-1 text-[length:var(--admin-text-meta)] text-[color:var(--admin-subtle)]" key={`gap-${index}`}>
                 …
               </span>
             ) : (
               <AdminButton
-                aria-current={item === pageInfo.page ? 'page' : undefined}
+                aria-current={item === listing.page ? 'page' : undefined}
+                className="min-w-8 px-2 tabular-nums"
                 key={item}
                 onClick={() => setFilters((current) => ({ ...current, page: item }))}
                 size="sm"
-                variant={item === pageInfo.page ? 'primary' : 'secondary'}
+                variant={item === listing.page ? 'secondary' : 'ghost'}
               >
                 {item}
               </AdminButton>
             ),
           )}
           <AdminButton
-            disabled={!pageInfo.hasNextPage}
+            aria-label="Next"
+            disabled={!listing.hasNextPage}
             onClick={() => setFilters((current) => ({ ...current, page: current.page + 1 }))}
-            size="sm"
-            variant="secondary"
+            size="icon-sm"
+            variant="ghost"
           >
-            Next
+            <CaretRightIcon aria-hidden="true" className="size-4" />
           </AdminButton>
-          <span className="ml-auto text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
-            Page {pageInfo.page} of {pageInfo.totalPages}
+          <span className="ml-auto text-[length:var(--admin-text-micro)] tabular-nums text-[color:var(--admin-subtle)]">
+            {(listing.page - 1) * PAGE_SIZE + 1}–{Math.min(listing.page * PAGE_SIZE, total)} of {total}
           </span>
         </nav>
       )}
 
-      {/* Deleting a post is unrecoverable (there is no trash), so the row control opens the
-          shared confirmation dialog instead of window.confirm, and it says where the post
-          lives so the person can tell two same-titled posts apart. */}
       {pendingDelete && (
         <ConfirmDialog
           busy={deleting}
@@ -418,7 +419,6 @@ export function PostsManager() {
           title="Delete post"
         />
       )}
-
     </div>
   );
 }

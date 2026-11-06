@@ -350,7 +350,7 @@ test.describe('acceptance - structure and profile lifecycle through the admin UI
       await page.goto('/admin/profile');
       await page.getByLabel('Resume link').fill(replacement);
       await page.getByRole('button', { name: 'Save profile' }).click();
-      await expect(page.getByText('Everything on this page is saved.')).toBeVisible();
+      await expect(page.locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'Everything on this page is saved.');
 
       await page.reload();
       await expect(page.getByLabel('Resume link')).toHaveValue(replacement);

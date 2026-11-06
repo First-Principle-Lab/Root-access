@@ -1,28 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { adminApi } from '@/src/lib/api';
-import { useAuth } from '@/src/contexts/authContext';
 import { AdminButton } from '../../ui/admin-button';
 import { AdminField, AdminInput } from '../../ui/admin-field';
 import { Notice } from '../../ui/notice';
-import { AdminAuthLoading, AdminAuthShell } from './AdminAuthShell';
+import { AdminAuthShell } from './AdminAuthShell';
 
 export function AdminLoginPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading, checkAuth } = useAuth();
   const [email, setEmail] = useState('');
   const [secretKey, setSecretKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.push('/admin');
-    }
-  }, [isAuthenticated, isLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,21 +23,14 @@ export function AdminLoginPage() {
 
     try {
       await adminApi.login({ email, secretKey });
-      await checkAuth();
+      // Stay in the loading state through the navigation so the button does not flash back.
+      router.replace('/admin');
+      router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
-    } finally {
       setLoading(false);
     }
   };
-
-  if (isLoading) {
-    return <AdminAuthLoading />;
-  }
-
-  if (isAuthenticated) {
-    return null;
-  }
 
   return (
     <AdminAuthShell title="Admin Login" description="Sign in to manage your site.">

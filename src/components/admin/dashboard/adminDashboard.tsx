@@ -1,221 +1,200 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowSquareOutIcon, CaretRightIcon, PencilSimpleIcon } from '@phosphor-icons/react';
-import { adminApi, requestFailureMessage } from '@/src/lib/api';
+import { ArrowUpRightIcon } from '@phosphor-icons/react';
+import { requestFailureMessage } from '@/src/lib/api';
+import { useAdminQuery } from '@/src/lib/adminQuery';
+import {
+  DASHBOARD_RECENT_REQUEST,
+  adminQueryKeys,
+  loadPosts,
+  loadStats,
+} from '@/src/lib/adminQueries';
 import { postEditPath } from '@/src/lib/postEditor';
-import { contentTypeFor } from '@/src/components/admin/contentTypes';
-import type { DashboardStats, PostListItem } from '@/src/types';
+import type { PostListItem } from '@/src/types';
+import type { PostListRequest } from '@/src/lib/postFilters';
 import { adminButtonClass } from '@/src/components/ui/admin-button';
-import { AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-state';
-import { FormSection } from '@/src/components/ui/form-section';
-import { Notice } from '@/src/components/ui/notice';
+import { AdminErrorState } from '@/src/components/ui/admin-state';
 import { PageHeader } from '@/src/components/ui/page-header';
-import { StatusLabel } from '@/src/components/ui/status-label';
+import { AdminSection } from '@/src/components/ui/admin-section';
+import { Skeleton } from '@/src/components/ui/skeleton';
+import { StatusDot } from '@/src/components/ui/status-label';
 import { buildOverviewRows } from './overviewRows';
 import { formatRelativeTime, publicPostPath } from './recentEdits';
 
-/* Dashboard (checkpoint 5 of docs/admin-redesign-plan.md §3.1).
-   What this replaced: four large statistic cards whose "Posts" number counted published rows only
-   (src/app/api/admin/stats/route.ts before this change), a green "Live" button that navigated to
-   the site and read like a publish switch, and a "Quick Actions" panel of four buttons that all
-   did nothing but navigate to the screens the cards already linked to. What it is now: one list of
-   counts the API can actually make, a draft notice for the work that is not live yet, and the last
-   few things edited, each with its state and its destination. Both requests are single calls, and
-   a failed one is reported instead of rendering zeros (the baseline showed `0` for everything). */
+const DRAFTS_REQUEST: PostListRequest = { status: 'draft', limit: 5 };
 
 export function AdminDashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentPosts, setRecentPosts] = useState<PostListItem[]>([]);
-  const [editedAt, setEditedAt] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-
-  const fetchDashboard = async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const [statsResponse, recentResponse] = await Promise.all([
-        adminApi.getStats() as Promise<DashboardStats>,
-        adminApi.listPosts({ limit: 5 }) as Promise<{ posts: PostListItem[] }>,
-      ]);
-      setStats(statsResponse);
-      setRecentPosts(recentResponse.posts);
-      /* Captured here rather than during render: the relative labels need "now", and calling
-         Date.now() inside the component is both impure and the exact lint error the baseline had. */
-      setEditedAt(Date.now());
-    } catch (err) {
-      setStats(null);
-      setRecentPosts([]);
-      setLoadError(
-        requestFailureMessage(err, 'The dashboard could not be reached. Check your connection and try again.'),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void fetchDashboard();
-  }, []);
+  const stats = useAdminQuery(adminQueryKeys.stats, loadStats);
+  const recent = useAdminQuery(adminQueryKeys.posts(DASHBOARD_RECENT_REQUEST), () => loadPosts(DASHBOARD_RECENT_REQUEST));
+  const drafts = useAdminQuery(adminQueryKeys.posts(DRAFTS_REQUEST), () => loadPosts(DRAFTS_REQUEST));
+  /* "Now" for the relative dates, taken once when the screen mounts; Date.now() during render
+     is impure. */
+  const [now] = useState(() => Date.now());
 
   const viewSite = (
-    <Link
-      className={adminButtonClass({ variant: 'link' })}
-      href="/"
-      rel="noopener"
-      target="_blank"
-    >
-      <ArrowSquareOutIcon aria-hidden="true" className="size-4" />
+    <Link className={adminButtonClass({ variant: 'secondary', size: 'sm' })} href="/" rel="noopener" target="_blank">
       View site
+      <ArrowUpRightIcon aria-hidden="true" className="size-3.5" />
     </Link>
   );
 
-  if (loading) {
-    return <AdminLoadingState label="Loading dashboard" />;
-  }
-
-  if (loadError || !stats) {
-    return (
-      <>
-        <PageHeader
-          actions={viewSite}
-          description="What is live, what is waiting to be published, and what you last edited."
-          title="Dashboard"
-        />
-        <AdminErrorState
-          message={loadError || 'The dashboard returned no data.'}
-          onRetry={fetchDashboard}
-          title="Counts could not be loaded"
-        />
-      </>
-    );
-  }
-
-  const rows = buildOverviewRows(stats);
-  const draftsToReview = stats.drafts > 0;
+  const failed = stats.error !== undefined && stats.data === undefined;
 
   return (
     <>
-      <PageHeader
-        actions={viewSite}
-        description="What is live, what is waiting to be published, and what you last edited."
-        title="Dashboard"
-      />
+      <PageHeader actions={viewSite} title="Dashboard" />
 
-      {draftsToReview && (
-        <Notice
-          action={
-            <Link className={adminButtonClass({ size: 'sm', variant: 'secondary' })} href="/admin/posts">
-              Review drafts
-            </Link>
-          }
-          className="mb-[var(--admin-space-5)]"
-          tone="warning"
-        >
-          {stats.drafts} {stats.drafts === 1 ? 'draft is' : 'drafts are'} not on the public site yet.
-        </Notice>
-      )}
-
-      <div className="flex flex-col gap-[var(--admin-space-5)]">
-        <FormSection
-          description="Every number is counted from the database when this page loads."
-          title="Content"
-        >
-          <ul className="-my-[var(--admin-space-2)]">
-            {rows.map((row) => (
-              <li
-                className="border-t border-[color:var(--admin-border)] first:border-t-0"
-                key={row.key}
-              >
-                <Link
-                  className="flex items-center gap-[var(--admin-space-3)] py-[var(--admin-space-2)] transition-colors hover:text-[color:var(--admin-heading)] focus-visible:text-[color:var(--admin-heading)]"
-                  href={row.href}
-                >
-                  <span className="min-w-0 flex-1 truncate text-[length:var(--admin-text-body)] text-[color:var(--admin-heading)]">
-                    {row.label}
-                  </span>
-                  <span className="hidden text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)] sm:inline">
-                    {row.hint}
-                  </span>
-                  <span className="text-[length:var(--admin-text-panel-title)] font-semibold tabular-nums text-[color:var(--admin-heading)]">
-                    {row.value}
-                  </span>
-                  <CaretRightIcon aria-hidden="true" className="size-4 text-[color:var(--admin-subtle)]" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </FormSection>
-
-        <FormSection
-          actions={
-            <Link className={adminButtonClass({ size: 'sm', variant: 'ghost' })} href="/admin/posts">
-              <PencilSimpleIcon aria-hidden="true" className="size-4" />
-              All posts
-            </Link>
-          }
-          className="max-w-[var(--admin-shell-max)]"
-          description="The five most recently saved posts, whichever subsection they live in."
-          title="Recently edited"
-        >
-          {recentPosts.length === 0 ? (
-            <p className="text-[length:var(--admin-text-meta)] text-[color:var(--admin-muted)]">
-              Nothing has been saved yet.{' '}
-              <Link className="underline underline-offset-4" href="/admin/posts">
-                Write a post
-              </Link>
-              .
-            </p>
-          ) : (
-            <ul className="-my-[var(--admin-space-2)]">
-              {recentPosts.map((post) => {
-                const TypeIcon = contentTypeFor(post.subsection.displayStyle).icon;
-                return (
-                  <li
-                    className="flex flex-wrap items-center gap-x-[var(--admin-space-3)] gap-y-1 border-t border-[color:var(--admin-border)] py-[var(--admin-space-2)] first:border-t-0"
-                    key={post.id}
+      {failed ? (
+        <AdminErrorState
+          message={requestFailureMessage(stats.error, 'The dashboard could not be reached. Check your connection and try again.')}
+          onRetry={() => {
+            void stats.refresh();
+            void recent.refresh();
+            void drafts.refresh();
+          }}
+          title="Counts could not be loaded"
+        />
+      ) : (
+        <>
+          <ul aria-label="Content counts" className="grid grid-cols-2 overflow-hidden rounded-[var(--admin-radius-panel)] border border-[color:var(--admin-border)] min-[600px]:grid-cols-3 min-[1000px]:grid-cols-5">
+            {stats.data
+              ? buildOverviewRows(stats.data).map((row) => (
+                  <li className="-mb-px -mr-px border-b border-r border-[color:var(--admin-border)]" key={row.key}>
+                  <Link
+                    className="flex h-full flex-col gap-[var(--admin-space-1)] p-[var(--admin-space-4)] hover:bg-[color:var(--admin-hover)]"
+                    href={row.href}
                   >
-                    <TypeIcon aria-hidden="true" className="size-4 shrink-0 text-[color:var(--admin-subtle)]" />
-                    <span className="min-w-0 flex-1 truncate text-[length:var(--admin-text-body)] text-[color:var(--admin-heading)]">
-                      {post.title}
+                    <span className="text-[length:var(--admin-text-micro)] font-medium uppercase tracking-[var(--admin-tracking-eyebrow)] text-[color:var(--admin-subtle)]">
+                      {row.label}
                     </span>
-                    <StatusLabel tone={post.published ? 'live' : 'draft'}>
-                      {post.published ? 'Live' : 'Draft'}
-                    </StatusLabel>
-                    {editedAt !== null && (
-                      <span className="text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
-                        {post.subsection.name} · edited {formatRelativeTime(post.updatedAt, editedAt)}
-                      </span>
-                    )}
-                    <span className="ml-auto flex shrink-0 items-center gap-[var(--admin-space-1)]">
-                      <Link
-                        aria-label={`Edit ${post.title}`}
-                        className={adminButtonClass({ size: 'sm', variant: 'ghost' })}
-                        href={postEditPath(post.subsection.slug, post.slug)}
-                      >
-                        Edit
-                      </Link>
-                      {post.published && (
-                        <Link
-                          aria-label={`View ${post.title} on the public site`}
-                          className={adminButtonClass({ size: 'icon-sm', variant: 'ghost' })}
-                          href={publicPostPath(post.subsection.slug, post.slug)}
-                          rel="noopener"
-                          target="_blank"
-                        >
-                          <ArrowSquareOutIcon aria-hidden="true" className="size-4" />
-                        </Link>
-                      )}
+                    <span className="block text-[28px] font-semibold leading-none tracking-[var(--admin-tracking-title)] tabular-nums text-[color:var(--admin-heading)]">
+                      {row.value}
                     </span>
+                    <span className="truncate text-[length:var(--admin-text-micro)] text-[color:var(--admin-muted)]">{row.hint}</span>
+                  </Link>
                   </li>
-                );
-              })}
-            </ul>
-          )}
-        </FormSection>
-      </div>
+                ))
+              : Array.from({ length: 5 }, (_, index) => (
+                  <li
+                    className="-mb-px -mr-px flex flex-col gap-[var(--admin-space-2)] border-b border-r border-[color:var(--admin-border)] p-[var(--admin-space-4)]"
+                    key={index}
+                  >
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-7 w-10" />
+                    <Skeleton className="h-3 w-20" />
+                  </li>
+                ))}
+          </ul>
+
+          <div className="mt-[var(--admin-space-8)] grid gap-[var(--admin-space-8)] min-[1000px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+            <AdminSection
+              action={
+                <Link className="text-[length:var(--admin-text-meta)] text-[color:var(--admin-muted)] hover:text-[color:var(--admin-heading)]" href="/admin/posts">
+                  All posts
+                </Link>
+              }
+              title="Recently edited"
+            >
+              <PostRows
+                empty={
+                  <>
+                    Nothing has been saved yet.{' '}
+                    <Link className="text-[color:var(--admin-heading)] underline underline-offset-4" href="/admin/posts/new">
+                      Write a post
+                    </Link>
+                  </>
+                }
+                now={now}
+                posts={recent.data?.posts}
+              />
+            </AdminSection>
+
+            <AdminSection
+              action={
+                drafts.data && drafts.data.total > 0 ? (
+                  <Link
+                    className="text-[length:var(--admin-text-meta)] text-[color:var(--admin-muted)] hover:text-[color:var(--admin-heading)]"
+                    href="/admin/posts?status=draft"
+                  >
+                    {drafts.data.total} in total
+                  </Link>
+                ) : undefined
+              }
+              title="Drafts"
+            >
+              <PostRows compact empty="No drafts. Everything you have written is live." now={now} posts={drafts.data?.posts} />
+            </AdminSection>
+          </div>
+        </>
+      )}
     </>
+  );
+}
+
+function PostRows({
+  posts,
+  now,
+  empty,
+  compact = false,
+}: {
+  posts: PostListItem[] | undefined;
+  now: number;
+  empty: React.ReactNode;
+  compact?: boolean;
+}) {
+  if (!posts) {
+    return (
+      <ul aria-busy="true" aria-label="Loading posts">
+        {Array.from({ length: compact ? 3 : 5 }, (_, index) => (
+          <li className="flex items-center gap-[var(--admin-space-3)] border-t border-[color:var(--admin-border)] py-[var(--admin-space-3)] first:border-t-0" key={index}>
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-3 w-16" />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (posts.length === 0) {
+    return <p className="py-[var(--admin-space-3)] text-[length:var(--admin-text-meta)] text-[color:var(--admin-muted)]">{empty}</p>;
+  }
+
+  return (
+    <ul>
+      {posts.map((post) => (
+        <li className="group relative flex items-center gap-[var(--admin-space-3)] border-t border-[color:var(--admin-border)] py-[var(--admin-space-3)] first:border-t-0" key={post.id}>
+          {!compact && <StatusDot tone={post.published ? 'live' : 'draft'} />}
+          <div className="min-w-0 flex-1">
+            <Link
+              aria-label={`Edit ${post.title}`}
+              className="block truncate text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)] after:absolute after:inset-0 after:content-['']"
+              href={postEditPath(post.subsection.slug, post.slug)}
+            >
+              {post.title}
+            </Link>
+            <p className="truncate text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+              {post.subsection.name} · {formatRelativeTime(post.updatedAt, now)}
+            </p>
+          </div>
+          {post.published && (
+            <Link
+              aria-label={`View ${post.title} on the public site`}
+              className={adminButtonClass({
+                className: 'relative z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-[849px]:opacity-100',
+                size: 'icon-sm',
+                variant: 'ghost',
+              })}
+              href={publicPostPath(post.subsection.slug, post.slug)}
+              rel="noopener"
+              target="_blank"
+            >
+              <ArrowUpRightIcon aria-hidden="true" className="size-4" />
+            </Link>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }

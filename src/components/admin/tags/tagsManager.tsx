@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { HashIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react';
-import { adminApi } from '@/src/lib/api';
+import { adminApi, requestFailureMessage } from '@/src/lib/api';
+import { useAdminQuery } from '@/src/lib/adminQuery';
+import { adminQueryKeys, invalidateAfter, loadTags } from '@/src/lib/adminQueries';
 import { Tag } from '@/src/types';
 import { AdminButton } from '@/src/components/ui/admin-button';
 import { AdminEmptyState, AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-state';
@@ -19,9 +21,14 @@ import { PageHeader } from '@/src/components/ui/page-header';
    already says what to do about it (src/app/api/admin/tags/[tagSlug]/route.ts:146), so that
    message is now surfaced in an inline Notice next to the row instead of a modal alert. */
 export function TagsManager() {
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const tagsQuery = useAdminQuery(adminQueryKeys.tags, loadTags);
+  const tags = tagsQuery.data ?? [];
+  const loading = tagsQuery.isLoading;
+  const loadError =
+    tagsQuery.data === undefined && tagsQuery.error !== undefined
+      ? requestFailureMessage(tagsQuery.error, 'Could not load tags.')
+      : '';
+  const fetchTags = () => void tagsQuery.refresh();
   const [showForm, setShowForm] = useState(false);
   const [tagName, setTagName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -29,24 +36,6 @@ export function TagsManager() {
   const [pendingDelete, setPendingDelete] = useState<Tag | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-
-  useEffect(() => {
-    void fetchTags();
-  }, []);
-
-  const fetchTags = async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const res = (await adminApi.getTags()) as { tags: Tag[] };
-      setTags(res.tags);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Could not load tags.');
-      setTags([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const closeForm = () => {
     setShowForm(false);
@@ -61,7 +50,7 @@ export function TagsManager() {
     try {
       await adminApi.createTag({ name: tagName });
       closeForm();
-      void fetchTags();
+      invalidateAfter.tags();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the tag.');
     } finally {
@@ -76,7 +65,7 @@ export function TagsManager() {
     try {
       await adminApi.deleteTag(pendingDelete.slug);
       setPendingDelete(null);
-      void fetchTags();
+      invalidateAfter.tags();
     } catch (err) {
       // Close the dialog on failure too: the row it referred to is still there in the list,
       // where the explanation belongs, and a 409 from this endpoint is a normal outcome.
@@ -94,7 +83,7 @@ export function TagsManager() {
   if (loadError) {
     return (
       <>
-        <PageHeader description="One shared list, used by every post." title="Tags" />
+        <PageHeader title="Tags" />
         <AdminErrorState message={loadError} onRetry={fetchTags} title="Tags could not be loaded" />
       </>
     );
@@ -111,7 +100,6 @@ export function TagsManager() {
             </AdminButton>
           )
         }
-        description="One shared list. Names are stored in upper case and shown that way on the public site."
         title="Tags"
       />
 
@@ -168,22 +156,21 @@ export function TagsManager() {
           title="No tags yet"
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-[var(--admin-space-3)] min-[600px]:grid-cols-2 min-[850px]:grid-cols-3">
+        <ul className="border-t border-[color:var(--admin-border)]">
           {tags.map((tag) => (
             <li
-              className="flex items-center gap-[var(--admin-space-3)] rounded-[var(--admin-radius-panel)] border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-[var(--admin-space-4)] min-h-[var(--admin-row-h)] transition-colors hover:border-[color:var(--admin-border-strong)] focus-within:border-[color:var(--admin-heading)]"
+              className="flex items-center gap-[var(--admin-space-3)] border-b border-[color:var(--admin-border)] px-[var(--admin-space-2)] py-[var(--admin-space-2)] hover:bg-[color:var(--admin-hover)] focus-within:bg-[color:var(--admin-hover)]"
               key={tag.id}
             >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)]">
-                  {tag.name}
-                </span>
-                <span className="block text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
-                  {tag.posts?.length || 0} {tag.posts?.length === 1 ? 'post' : 'posts'}
-                </span>
+              <span className="min-w-0 flex-1 truncate font-[family-name:var(--admin-font-mono)] text-[length:var(--admin-text-body)] text-[color:var(--admin-heading)]">
+                {tag.name}
+              </span>
+              <span className="text-[length:var(--admin-text-micro)] tabular-nums text-[color:var(--admin-subtle)]">
+                {tag.postCount ?? 0} {tag.postCount === 1 ? 'post' : 'posts'}
               </span>
               <AdminButton
                 aria-label={`Delete tag ${tag.name}`}
+                className="hover:bg-[color:var(--admin-danger-bg)] hover:text-[color:var(--admin-danger)]"
                 onClick={() => {
                   setDeleteError('');
                   setPendingDelete(tag);
@@ -206,9 +193,9 @@ export function TagsManager() {
           title="Delete tag"
           itemName={pendingDelete.name}
           description={
-            pendingDelete.posts?.length
-              ? `This tag is on ${pendingDelete.posts.length} ${
-                  pendingDelete.posts.length === 1 ? 'post' : 'posts'
+            pendingDelete.postCount
+              ? `This tag is on ${pendingDelete.postCount} ${
+                  pendingDelete.postCount === 1 ? 'post' : 'posts'
                 }, so deleting it will be refused until it is removed from them.`
               : 'It disappears from the post editor and from the public tag pages. Nothing else changes.'
           }

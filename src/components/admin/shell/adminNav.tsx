@@ -17,12 +17,6 @@ export interface AdminNavItem {
   icon: Icon;
 }
 
-/* Nav entries replace the previous emoji sidebar (dashboard, sections, subsections, posts,
-   tags, profile - one glyph each) one-for-one with Phosphor icons, per docs/admin-redesign-plan.md
-   ("Replace emoji used as navigation or content type icons with the existing Phosphor icon
-   family"). The emoji are deliberately not repeated here: the acceptance check for that line is
-   a grep over this directory. Route paths and the auth-exempt routes live in ./adminRoutes so
-   the mapping is unit-testable. */
 const NAV_ICONS: Record<string, Icon> = {
   '/admin': SquaresFourIcon,
   '/admin/sections': FolderIcon,
@@ -37,10 +31,20 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = ADMIN_ROOT_ROUTES.map((route) => 
   icon: NAV_ICONS[route.href],
 }));
 
+const byHref = (href: string) => ADMIN_NAV_ITEMS.find((item) => item.href === href)!;
+
+/* Writing comes first because it is what the admin is opened for; the site structure and the
+   profile change far less often. */
+export const ADMIN_NAV_GROUPS: { label: string; items: AdminNavItem[] }[] = [
+  { label: 'Overview', items: [byHref('/admin')] },
+  { label: 'Content', items: [byHref('/admin/posts'), byHref('/admin/tags')] },
+  { label: 'Structure', items: [byHref('/admin/sections'), byHref('/admin/subsections')] },
+  { label: 'Site', items: [byHref('/admin/profile')] },
+];
+
 export { isActiveAdminRoutePath as isActiveNavItem };
 
-/* Name of the section the current URL belongs to, for the top bar. */
+/* Name of the section the current URL belongs to, for the mobile top bar. */
 export function currentAdminLocation(pathname: string): AdminNavItem | undefined {
   return ADMIN_NAV_ITEMS.find((item) => isActiveAdminRoutePath(pathname, item.href));
 }
-

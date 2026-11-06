@@ -25,13 +25,13 @@ const OVERVIEW_ROWS: OverviewSource[] = [
     key: 'published',
     label: 'Published posts',
     href: '/admin/posts',
-    hintText: (value) => `${value} on the public site`,
+    hintText: () => 'on the public site',
   },
   {
     key: 'drafts',
     label: 'Drafts',
     href: '/admin/posts',
-    hintText: () => 'not on the public site',
+    hintText: () => 'not public yet',
   },
   {
     key: 'sections',
@@ -51,7 +51,7 @@ const OVERVIEW_ROWS: OverviewSource[] = [
     key: 'tags',
     label: 'Tags',
     href: '/admin/tags',
-    hintText: (value) => `${value} in use`,
+    hintText: () => 'shared across posts',
   },
 ];
 

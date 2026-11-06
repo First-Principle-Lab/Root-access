@@ -37,8 +37,8 @@ describe('buildOverviewRows', () => {
   });
 
   it('labels the drafts row as work that is not public', () => {
-    expect(row('drafts').hint).toBe('not on the public site');
-    expect(row('published').hint).toBe('12 on the public site');
+    expect(row('drafts').hint).toBe('not public yet');
+    expect(row('published').hint).toBe('on the public site');
   });
 
   it('shows a hidden count when there is one and says so plainly when there is not', () => {

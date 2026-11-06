@@ -2,37 +2,33 @@ import { prisma } from "@/src/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/src/lib/authWrapper";
 
-/* Dashboard counts (checkpoint 5 of docs/admin-redesign-plan.md).
-   The baseline reported one number per content type and got "Posts" wrong: it counted
-   `published: true` only, so five drafts existed in the database and the dashboard said the
-   site had 12 posts with none in progress. Every number here is a direct count, and drafts and
-   hidden rows are broken out because those are the two states the old dashboard made invisible.
-   "Recently edited" is deliberately NOT here: it is a list of posts, and the post list endpoint
-   (src/app/api/admin/posts/route.ts) is the one place that answers questions about posts. */
+interface StatsRow {
+  sections: number;
+  hiddenSections: number;
+  subsections: number;
+  hiddenSubsections: number;
+  published: number;
+  drafts: number;
+  tags: number;
+}
+
+/* Dashboard counts. All seven come back from one statement so the dashboard costs a single
+   round trip to the database instead of seven. */
 async function getHandler(req: NextRequest) {
   try {
-    const [sections, hiddenSections, subsections, hiddenSubsections, published, drafts, tags] =
-      await Promise.all([
-        prisma.topCategory.count(),
-        prisma.topCategory.count({ where: { isVisible: false } }),
-        prisma.subsection.count(),
-        prisma.subsection.count({ where: { isVisible: false } }),
-        prisma.post.count({ where: { published: true } }),
-        prisma.post.count({ where: { published: false } }),
-        prisma.tag.count(),
-      ]);
+    const [row] = await prisma.$queryRaw<StatsRow[]>`
+      SELECT
+        (SELECT COUNT(*) FROM "TopCategory")::int                         AS "sections",
+        (SELECT COUNT(*) FROM "TopCategory" WHERE NOT "isVisible")::int   AS "hiddenSections",
+        (SELECT COUNT(*) FROM "Subsection")::int                          AS "subsections",
+        (SELECT COUNT(*) FROM "Subsection" WHERE NOT "isVisible")::int    AS "hiddenSubsections",
+        (SELECT COUNT(*) FROM "Post" WHERE "published")::int              AS "published",
+        (SELECT COUNT(*) FROM "Post" WHERE NOT "published")::int          AS "drafts",
+        (SELECT COUNT(*) FROM "Tag")::int                                 AS "tags"
+    `;
 
     return NextResponse.json(
-      {
-        sections,
-        hiddenSections,
-        subsections,
-        hiddenSubsections,
-        published,
-        drafts,
-        totalPosts: published + drafts,
-        tags,
-      },
+      { ...row, totalPosts: row.published + row.drafts },
       { status: 200 }
     );
   } catch (error) {

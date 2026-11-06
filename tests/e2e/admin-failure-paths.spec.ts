@@ -245,7 +245,7 @@ test.describe('profile screen - upload failure path', () => {
     // src/app/api/admin/upload/route.ts:26, not a simulated one.
     await expect(notice(page)).toContainText('Your other answers are still here, and the profile picture is unchanged.');
     await expect(page.getByLabel('Bio')).toHaveValue(bio);
-    await expect(adminMain(page).getByText('Unsaved changes', { exact: true })).toBeVisible();
+    await expect(adminMain(page).locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'Unsaved changes');
 
     // The form was never submitted, so the stored row still holds the seed's bio.
     const storedAfter = (await (await page.request.get('/api/admin/profile')).json()) as {

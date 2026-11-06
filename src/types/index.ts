@@ -10,6 +10,8 @@ export interface Profile {
   email: string | null;
   resumeUrl: string | null;
   profilePicture: string;
+  /** The admin's display name, joined in by GET /api/admin/profile. */
+  name?: string;
 }
 
 export interface TopCategory {
@@ -71,6 +73,7 @@ export interface Tag {
   name: string;
   slug: string;
   posts?: Post[];
+  postCount?: number;
 }
 
 export interface Admin {
