@@ -17,7 +17,6 @@ export function GenerativeBackground() {
     let lastFrame = 0;
     let redraw = () => {};
     const motion = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
     const resize = () => {
       if (width === window.innerWidth && height === window.innerHeight) return false;
       width = window.innerWidth;

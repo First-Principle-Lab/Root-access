@@ -13,6 +13,7 @@ const getSidebarData = unstable_cache(
               xLink: true,
               instagramLink: true,
               linkedinLink: true,
+              githubLink: true,
               email: true,
               resumeUrl: true,
               profilePicture: true,

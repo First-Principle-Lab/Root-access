@@ -1,0 +1,266 @@
+/* Admin design tokens (checkpoint 2 of docs/admin-redesign-plan.md).
+   Specification: docs/admin-redesign/README.md §4.
+   Scope is `.admin-shell` / `body:has(.admin-shell)` and never `.site-shell`, so every
+   public selector in src/app/globals.css stays untouched and no public rule leaks into
+   dense admin forms and lists. This file is the only place in the admin area where
+   literal colour values are written: components and primitives read them through
+   var(--admin-*). Light values are the default and dark overrides key off the `dark`
+   class that next-themes already writes on <html> (src/app/layout.tsx:45), mirroring the
+   public convention in src/app/globals.css:240-269. */
+
+/* Theme-independent tokens: font, type scale, spacing, layout, border, radius, focus,
+   motion and form metrics. Custom properties inherit, so declaring them on the body of an
+   admin route makes them available to the shell, its pages and any portal mounted on body. */
+body:has(.admin-shell) {
+  /* Font: the public site's Inter, loaded once in src/app/layout.tsx:17. */
+  --admin-font-sans: var(--font-site-sans), Arial, sans-serif;
+  --admin-font-mono: var(--font-geist-mono), monospace;
+
+  /* Type scale (12px is the floor; no admin text is smaller). */
+  --admin-text-page-title: 24px;
+  --admin-text-panel-title: 16px;
+  --admin-text-body: 14px;
+  --admin-text-meta: 13px;
+  --admin-text-micro: 12px;
+  --admin-text-editor: 16px;
+  --admin-leading-tight: 1.25;
+  --admin-leading-body: 1.5;
+  --admin-leading-editor: 1.82;
+  --admin-tracking-title: -0.025em;
+  --admin-tracking-eyebrow: 0.08em;
+
+  /* Spacing scale, 4px base. */
+  --admin-space-1: 4px;
+  --admin-space-2: 8px;
+  --admin-space-3: 12px;
+  --admin-space-4: 16px;
+  --admin-space-5: 20px;
+  --admin-space-6: 24px;
+  --admin-space-8: 32px;
+  --admin-space-12: 48px;
+
+  /* Layout: denser and wider than the public 656px reading column. The 850px and 600px
+     breakpoints are the public ones (src/app/globals.css:393, :402) so one mental model
+     covers both halves of the product. */
+  --admin-shell-max: 1080px;
+  --admin-editor-max: 880px;
+  --admin-sidebar-w: 232px;
+  --admin-header-h: 56px;
+  --admin-gutter: 24px;
+  --admin-row-h: 56px;
+  --admin-breakpoint-nav: 850px;
+  --admin-breakpoint-stack: 600px;
+
+  /* Borders, radii, elevation. 1px hairlines replace shadows; the sticky save bar edge and
+     the mobile drawer scrim are the only two elevations the admin is allowed. */
+  --admin-border-width: 1px;
+  --admin-radius-control: 6px;
+  --admin-radius-panel: 8px;
+  --admin-radius-pill: 999px;
+  --admin-shadow-bar: 0 -1px 0 var(--admin-border);
+  --admin-shadow-drawer: 0 0 60px rgb(0 0 0 / 0.35);
+  --admin-scrim: rgb(0 0 0 / 0.5);
+
+  /* Focus: the public 2px ring (src/app/globals.css:293) with the tighter offset that
+     dense rows need. Never remove an outline without this replacement. */
+  --admin-ring: 2px solid var(--admin-heading);
+  --admin-ring-offset: 2px;
+
+  /* Form metrics. */
+  --admin-control-h: 36px;
+  --admin-touch-h: 44px;
+  --admin-field-gap: 6px;
+  --admin-panel-pad: 20px;
+  --admin-input-border: var(--admin-border-width) solid var(--admin-border-strong);
+  --admin-input-bg: var(--admin-bg);
+  --admin-textarea-min-h: 320px;
+
+  /* Motion. Collapses under prefers-reduced-motion below, same switch the public site uses. */
+  --admin-motion-fast: 150ms;
+  --admin-motion-base: 180ms;
+  --admin-motion-drawer: 250ms;
+  --admin-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  font-variant-numeric: tabular-nums;
+}
+
+/* Light theme (default, matching `html:not(.dark) .site-shell`). Palette values are reused
+   from the public tokens in src/app/globals.css:240-257. */
+body:has(.admin-shell) {
+  --admin-bg: #ffffff;
+  --admin-surface: #fafafa;
+  --admin-surface-2: #f1f1f1;
+  --admin-border: #e8e8e8;
+  --admin-border-strong: #d4d4d4;
+  --admin-text: #555555;
+  --admin-heading: #111111;
+  --admin-muted: #6b6b6b;
+  --admin-subtle: #737373;
+  --admin-hover: #f1f1f1;
+  --admin-active: #ebebeb;
+  --admin-primary-bg: #111111;
+  --admin-primary-text: #ffffff;
+  --admin-primary-hover: #000000;
+  --admin-danger: #b91c1c;
+  --admin-danger-bg: #fbeaea;
+  --admin-success: #166534;
+  --admin-success-bg: #e9f5ed;
+  --admin-warning: #92400e;
+  --admin-warning-bg: #fbf1e2;
+  --admin-info: #1d4ed8;
+  --admin-info-bg: #eaf0fd;
+  color-scheme: light;
+  scrollbar-color: #ddd #fff;
+}
+
+/* Dark theme (default site theme; next-themes writes `class="dark"` on <html>). Palette
+   values are reused from `html.dark .site-shell` in src/app/globals.css:260-269. */
+html.dark body:has(.admin-shell) {
+  --admin-bg: #050505;
+  --admin-surface: #0f0f0f;
+  --admin-surface-2: #161616;
+  --admin-border: #2b2b2b;
+  --admin-border-strong: #3d3d3d;
+  --admin-text: #bbbbbb;
+  --admin-heading: #f5f5f5;
+  --admin-muted: #a8a8a8;
+  --admin-subtle: #929292;
+  --admin-hover: #161616;
+  --admin-active: #1f1f1f;
+  --admin-primary-bg: #f5f5f5;
+  --admin-primary-text: #0f0f0f;
+  --admin-primary-hover: #ffffff;
+  --admin-danger: #f87171;
+  --admin-danger-bg: #2a1214;
+  --admin-success: #4ade80;
+  --admin-success-bg: #10231a;
+  --admin-warning: #fbbf24;
+  --admin-warning-bg: #241c0c;
+  --admin-info: #93c5fd;
+  --admin-info-bg: #101a29;
+  color-scheme: dark;
+  scrollbar-color: #222 #050505;
+}
+
+/* Shell base. Flat surfaces only: the public generative tree/root background
+   (src/app/globals.css:420-422) is deliberately not carried into the admin. These rules go
+   in @layer base so that Tailwind utilities on an element (including the token-based
+   utilities used by the admin primitives) still win over them; the token blocks above stay
+   unlayered because no utility competes with a --admin-* custom property. */
+@layer base {
+  .admin-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background-color: var(--admin-bg);
+    color: var(--admin-text);
+    font-family: var(--admin-font-sans);
+    font-size: var(--admin-text-body);
+    line-height: var(--admin-leading-body);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .admin-shell a { color: inherit; }
+  .admin-shell a,
+  .admin-shell button { -webkit-tap-highlight-color: transparent; }
+  .admin-shell a,
+  .admin-shell button {
+    transition: color var(--admin-motion-base) ease, background-color var(--admin-motion-base) ease,
+      border-color var(--admin-motion-base) ease;
+  }
+  .admin-shell ::placeholder { color: var(--admin-subtle); opacity: 1; }
+}
+
+/* Focus is the one thing that may not be dropped, so this single rule stays OUTSIDE the
+   base layer: unlayered author styles outrank every Tailwind utility, which is what keeps a
+   visible ring on the `focus:outline-none` inputs left over in pages that are not converted
+   yet. A component that genuinely needs a different ring must say so with a rule of its own
+   in this file rather than with a utility. */
+.admin-shell :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--admin-ring);
+  outline-offset: var(--admin-ring-offset);
+}
+
+/* Control cursors. Tailwind v4 preflight keeps `appearance: button` but gives buttons no
+   cursor, so every admin control rendered the default arrow; PR #1 (dev@6be9daa) fixed that with
+   these exact rules in src/app/globals.css. They live here instead because this file is the only
+   place admin chrome is styled: the single `.admin-shell` element is rendered by
+   src/app/admin/layout.tsx, the same module that imports this stylesheet, so every admin route
+   (including /admin/login and /admin/signup, which do not use AdminLayout) gets them, and
+   src/app/globals.css is left holding only public `.site-shell` selectors. They stay unlayered,
+   exactly as on dev, so a control cannot lose its pointer by carrying a utility class. */
+.admin-shell button,
+.admin-shell [role="button"],
+.admin-shell input[type="button"],
+.admin-shell input[type="submit"],
+.admin-shell input[type="reset"],
+.admin-shell input[type="file"],
+.admin-shell input[type="checkbox"],
+.admin-shell input[type="radio"],
+.admin-shell select,
+.admin-shell summary,
+.admin-shell label:has(input[type="checkbox"]),
+.admin-shell label:has(input[type="radio"]) { cursor: pointer; }
+/* Disabled controls stay visibly non-interactive. */
+.admin-shell button:disabled,
+.admin-shell [role="button"][aria-disabled="true"],
+.admin-shell input[type="button"]:disabled,
+.admin-shell input[type="submit"]:disabled,
+.admin-shell input[type="reset"]:disabled,
+.admin-shell input[type="file"]:disabled,
+.admin-shell input[type="checkbox"]:disabled,
+.admin-shell input[type="radio"]:disabled,
+.admin-shell select:disabled { cursor: not-allowed; }
+
+@media (max-width: 849px) {
+  body:has(.admin-shell) { --admin-gutter: 16px; --admin-panel-pad: 16px; }
+}
+
+/* Markdown preview in the post editor. `markdownToHtml` (src/lib/markdown.ts) emits the same
+   class-bearing HTML the published article page serves, and that markup may not change, so the
+   preview is re-coloured here instead: these rules are unlayered, which is what makes them beat
+   utilities such as `text-neutral-300` and `bg-[#1a1a1a]` inside the generated fragment. */
+.admin-shell .admin-md-preview { color: var(--admin-text); }
+.admin-shell .admin-md-preview :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--admin-heading);
+  font-weight: 620;
+  letter-spacing: var(--admin-tracking-title);
+  line-height: var(--admin-leading-tight);
+}
+.admin-shell .admin-md-preview :is(p, li, td, th) { color: var(--admin-text); }
+.admin-shell .admin-md-preview a {
+  color: var(--admin-info);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.admin-shell .admin-md-preview :is(strong, em, del) { color: var(--admin-heading); }
+.admin-shell .admin-md-preview :is(pre, code) {
+  background: var(--admin-surface-2);
+  color: var(--admin-text);
+}
+.admin-shell .admin-md-preview pre { border: var(--admin-input-border); }
+.admin-shell .admin-md-preview :is(hr, td, th) { border-color: var(--admin-border); }
+.admin-shell .admin-md-preview blockquote {
+  border-left-color: var(--admin-border-strong);
+  color: var(--admin-muted);
+}
+.admin-shell .admin-md-preview .admin-md-empty { color: var(--admin-subtle); }
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell *, .admin-shell *::before, .admin-shell *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}
+
+/* Skeleton shimmer. A slow sweep reads as "loading"; a static block reads as broken. */
+.admin-shell .admin-skeleton {
+  background-image: linear-gradient(90deg, transparent 0, color-mix(in srgb, var(--admin-heading) 6%, transparent) 50%, transparent 100%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: admin-skeleton 1.4s ease-in-out infinite;
+}
+@keyframes admin-skeleton {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell .admin-skeleton { animation: none; }
+}

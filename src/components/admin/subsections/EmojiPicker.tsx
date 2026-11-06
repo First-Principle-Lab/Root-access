@@ -30,23 +30,25 @@ export function EmojiPicker({ value, onChange }: EmojiPickerProps) {
 
   return (
     <div className="relative">
-      <label className="block text-[13px] font-medium text-[#e5e5e5] mb-2">
-        Icon (Emoji)
-      </label>
+      <span className="mb-[var(--admin-field-gap)] block text-[length:var(--admin-text-meta)] font-medium text-[color:var(--admin-heading)]">
+        Icon
+      </span>
       
       <div className="flex gap-2">
         {/* Current emoji display */}
-        <div className="w-12 h-12 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg flex items-center justify-center text-2xl">
+        <div className="flex size-[var(--admin-touch-h)] shrink-0 items-center justify-center rounded-[var(--admin-radius-control)] border border-[color:var(--admin-border-strong)] bg-[color:var(--admin-input-bg)] text-[length:var(--admin-text-panel-title)]">
           {value || '📄'}
         </div>
         
         {/* Picker button */}
         <button
-          type="button"
+          aria-expanded={isOpen}
+          aria-haspopup="dialog"
+          className="h-[var(--admin-control-h)] min-w-0 flex-1 cursor-pointer rounded-[var(--admin-radius-control)] border border-[color:var(--admin-border-strong)] bg-[color:var(--admin-input-bg)] px-[var(--admin-space-3)] text-left text-[length:var(--admin-text-body)] text-[color:var(--admin-heading)] transition-colors hover:border-[color:var(--admin-heading)]"
           onClick={() => setIsOpen(!isOpen)}
-          className="flex-1 px-4 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-[14px] hover:border-white transition text-left"
+          type="button"
         >
-          {value ? `${value} Selected` : 'Choose emoji...'}
+          {value ? `${value} selected` : 'Choose an icon'}
         </button>
       </div>
 
@@ -60,18 +62,18 @@ export function EmojiPicker({ value, onChange }: EmojiPickerProps) {
           />
           
           {/* Picker panel */}
-          <div className="absolute top-full mt-2 left-0 right-0 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg shadow-2xl z-50 overflow-hidden">
+          <div className="absolute left-0 right-0 top-full z-50 mt-[var(--admin-space-2)] overflow-hidden rounded-[var(--admin-radius-panel)] border border-[color:var(--admin-border-strong)] bg-[color:var(--admin-surface)] shadow-[var(--admin-shadow-drawer)]">
             {/* Category tabs */}
-            <div className="flex overflow-x-auto border-b border-[#2a2a2a] bg-[#0a0a0a]">
+            <div className="flex overflow-x-auto border-b border-[color:var(--admin-border)] bg-[color:var(--admin-surface-2)]">
               {Object.keys(EMOJI_CATEGORIES).map((category) => (
                 <button
                   key={category}
                   type="button"
                   onClick={() => setActiveCategory(category as keyof typeof EMOJI_CATEGORIES)}
-                  className={`px-3 py-2 text-[11px] font-medium whitespace-nowrap transition ${
+                  className={`border-b-2 px-[var(--admin-space-3)] py-[var(--admin-space-2)] text-[length:var(--admin-text-micro)] font-medium whitespace-nowrap transition-colors ${
                     activeCategory === category
-                      ? 'text-white border-b-2 border-white'
-                      : 'text-[#707070] hover:text-white'
+                      ? 'border-[color:var(--admin-heading)] text-[color:var(--admin-heading)]'
+                      : 'border-transparent text-[color:var(--admin-muted)] hover:text-[color:var(--admin-heading)]'
                   }`}
                 >
                   {category}
@@ -80,13 +82,14 @@ export function EmojiPicker({ value, onChange }: EmojiPickerProps) {
             </div>
 
             {/* Emoji grid */}
-            <div className="p-3 grid grid-cols-6 gap-2 max-h-48 overflow-y-auto">
+            <div className="grid max-h-48 grid-cols-6 gap-[var(--admin-space-2)] overflow-y-auto p-[var(--admin-space-3)]">
               {EMOJI_CATEGORIES[activeCategory].map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => handleEmojiSelect(emoji)}
-                  className="w-10 h-10 flex items-center justify-center text-2xl hover:bg-[#1a1a1a] rounded-lg transition"
+                  aria-label={`Choose ${emoji}`}
+                  className="flex size-10 cursor-pointer items-center justify-center rounded-[var(--admin-radius-control)] text-[length:var(--admin-text-panel-title)] transition-colors hover:bg-[color:var(--admin-hover)]"
                   title={emoji}
                 >
                   {emoji}
@@ -95,13 +98,14 @@ export function EmojiPicker({ value, onChange }: EmojiPickerProps) {
             </div>
 
             {/* Manual input */}
-            <div className="border-t border-[#2a2a2a] p-3">
+            <div className="border-t border-[color:var(--admin-border)] p-[var(--admin-space-3)]">
               <input
+                aria-label="Paste an emoji instead"
+                className="h-[var(--admin-control-h)] w-full rounded-[var(--admin-radius-control)] border border-[color:var(--admin-border-strong)] bg-[color:var(--admin-input-bg)] px-[var(--admin-space-3)] text-[length:var(--admin-text-meta)] text-[color:var(--admin-heading)] placeholder:text-[color:var(--admin-subtle)]"
+                onChange={(e) => onChange(e.target.value)}
+                placeholder="Or paste an icon"
                 type="text"
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder="Or paste emoji..."
-                className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg text-white text-[13px] focus:outline-none focus:border-white transition"
               />
             </div>
           </div>

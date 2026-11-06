@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FullScreenLoader, Spinner } from '../../ui/Spinner';
+import { AdminButton } from '../../ui/admin-button';
+import { AdminField, AdminInput } from '../../ui/admin-field';
+import { Notice } from '../../ui/notice';
+import { AdminAuthLoading, AdminAuthShell } from './AdminAuthShell';
 
 export function AdminSignupPage() {
   const router = useRouter();
@@ -61,8 +64,8 @@ export function AdminSignupPage() {
 
       // Redirect to login after successful signup
       router.push('/admin/login');
-    } catch (err: any) {
-      setError(err.message || 'Signup failed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Signup failed');
     } finally {
       setLoading(false);
     }
@@ -70,93 +73,63 @@ export function AdminSignupPage() {
 
   // Show loading state while checking eligibility
   if (checkingEligibility) {
-    return <FullScreenLoader />;
+    return <AdminAuthLoading />;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] px-4">
-      <div className="w-full max-w-md">
-        <h1 className="text-2xl sm:text-[28px] font-normal text-white mb-6 sm:mb-8 text-center">
-          Admin Signup
-        </h1>
+    <AdminAuthShell title="Admin Signup" description="Create the first administrator account.">
+        <form onSubmit={handleSubmit} className="space-y-[var(--admin-space-5)]">
+          {error && <Notice id="signup-error" tone="error" assertive>{error}</Notice>}
 
-        <form onSubmit={handleSubmit} className="bg-[#0a0a0a] p-6 sm:p-8 rounded-lg border border-[#1a1a1a]">
-          {error && (
-            <div className="mb-4 p-3 bg-red-950/50 border border-red-900/50 rounded text-xs sm:text-[13px] text-red-400 wrap-break-word">
-              {error}
-            </div>
-          )}
-
-          <div className="mb-4">
-            <label htmlFor="name" className="block text-xs sm:text-[13px] font-medium text-[#e5e5e5] mb-2">
-              Name
-            </label>
-            <input
-              id="name"
+          <AdminField label="Name" id="name" required>
+            <AdminInput
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
-              placeholder="John Doe"
-              className="w-full px-4 py-2 sm:py-2.5 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-sm sm:text-[14px] focus:outline-none focus:border-white transition"
+              autoComplete="name"
+              aria-describedby={error ? 'signup-error' : undefined}
             />
-          </div>
+          </AdminField>
 
-          <div className="mb-4">
-            <label htmlFor="email" className="block text-xs sm:text-[13px] font-medium text-[#e5e5e5] mb-2">
-              Email
-            </label>
-            <input
-              id="email"
+          <AdminField label="Email" id="email" required>
+            <AdminInput
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
-              placeholder="admin@example.com"
-              className="w-full px-4 py-2 sm:py-2.5 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-sm sm:text-[14px] focus:outline-none focus:border-white transition"
+              autoComplete="email"
+              aria-describedby={error ? 'signup-error' : undefined}
             />
-          </div>
+          </AdminField>
 
-          <div className="mb-6">
-            <label htmlFor="secretKey" className="block text-xs sm:text-[13px] font-medium text-[#e5e5e5] mb-2">
-              Secret Key
-            </label>
-            <input
-              id="secretKey"
+          <AdminField label="Secret Key" id="secretKey" hint="Keep this key private. You will use it to sign in." required>
+            <AdminInput
               type="password"
               value={formData.secretKey}
               onChange={(e) => setFormData({ ...formData, secretKey: e.target.value })}
               required
-              placeholder="Create a strong password"
-              className="w-full px-4 py-2 sm:py-2.5 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-white text-sm sm:text-[14px] focus:outline-none focus:border-white transition"
+              autoComplete="new-password"
+              aria-describedby={error ? 'signup-error' : undefined}
             />
-            <p className="text-xs text-[#707070] mt-2">
-              This will be your admin password. Keep it secure.
-            </p>
-          </div>
+          </AdminField>
 
-          <button
+          <AdminButton
             type="submit"
-            disabled={loading}
-            className="w-full bg-white text-[#0a0a0a] py-2 sm:py-2.5 rounded-lg hover:opacity-90 transition disabled:opacity-50 text-sm sm:text-[14px] font-medium mb-4 touch-manipulation"
+            variant="primary"
+            loading={loading}
+            className="w-full"
           >
-            {loading ? (
-              <span className="inline-flex items-center justify-center gap-2">
-                <Spinner size="sm" className="border-white/40 border-t-[#0a0a0a]" /> Sign Up
-              </span>
-            ) : (
-              'Sign Up'
-            )}
-          </button>
+            Sign Up
+          </AdminButton>
 
-          <p className="text-center text-xs sm:text-[13px] text-[#707070]">
+          <p className="text-center text-[length:var(--admin-text-meta)] text-[color:var(--admin-muted)]">
             Already have an account?{' '}
-            <Link href="/admin/login" className="text-white hover:opacity-70 transition">
+            <Link href="/admin/login" className="font-medium text-[color:var(--admin-heading)] underline-offset-4 hover:underline">
               Login
             </Link>
           </p>
         </form>
-      </div>
-    </div>
+    </AdminAuthShell>
   );
 }

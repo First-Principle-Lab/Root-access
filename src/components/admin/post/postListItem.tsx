@@ -1,90 +1,101 @@
-import { Post } from '@/src/types';
+'use client';
 
-interface PostListItemProps {
-  post: Post;
-  onTogglePublish: (post: Post) => void;
-  onDelete: (post: Post) => void;
-  onEdit: (post: Post) => void;
+import Link from 'next/link';
+import { ArrowUpRightIcon, TrashIcon } from '@phosphor-icons/react';
+import type { PostListItem } from '@/src/types';
+import { contentTypeFor } from '@/src/components/admin/contentTypes';
+import { adminButtonClass, AdminButton } from '@/src/components/ui/admin-button';
+import { StatusDot } from '@/src/components/ui/status-label';
+import { formatRelativeTime, publicPostPath } from '@/src/components/admin/dashboard/recentEdits';
+import { postEditPath } from '@/src/lib/postEditor';
+
+interface PostListItemRowProps {
+  post: PostListItem;
+  /** "Now" in epoch ms, captured once by the screen. */
+  now: number | null;
+  busy?: boolean;
+  onTogglePublish: (post: PostListItem) => void;
+  onDelete: (post: PostListItem) => void;
 }
 
-export function PostListItem({ post, onTogglePublish, onDelete, onEdit }: PostListItemProps) {
-  const getDisplayStyleBadge = (style: string) => {
-    const styles: Record<string, { bg: string; text: string; label: string }> = {
-      'BLOG': { bg: 'bg-blue-950/50', text: 'text-blue-400', label: '📝 Blog' },
-      'PROJECT': { bg: 'bg-purple-950/50', text: 'text-purple-400', label: '🚀 Project' },
-      'TITLE_ONLY': { bg: 'bg-gray-950/50', text: 'text-gray-400', label: '📌 Title' },
-      'blog': { bg: 'bg-blue-950/50', text: 'text-blue-400', label: '📝 Blog' },
-      'project': { bg: 'bg-purple-950/50', text: 'text-purple-400', label: '🚀 Project' },
-      'title_only': { bg: 'bg-gray-950/50', text: 'text-gray-400', label: '📌 Title' },
-    };
-    const s = styles[style] || styles['BLOG'];
-    return (
-      <span className={`px-2 py-0.5 rounded text-[11px] ${s.bg} ${s.text}`}>
-        {s.label}
-      </span>
-    );
-  };
+/* One row of the posts list. The whole row opens the editor (the title link stretches over it);
+   the row actions sit above that link and fade in on hover or focus, and stay visible on touch
+   screens where there is no hover. Every action carries the post title for assistive tech. */
+export function PostListItemRow({
+  busy = false,
+  now,
+  post,
+  onDelete,
+  onTogglePublish,
+}: PostListItemRowProps): React.ReactElement {
+  const TypeIcon = contentTypeFor(post.subsection.displayStyle).icon;
+  const hierarchy = [post.subsection.topCategory?.name, post.subsection.name].filter(Boolean).join(' / ');
 
   return (
-    <div className="bg-[#101010] p-4 sm:p-5 rounded-xl border border-[#1a1a1a] hover:border-[#2a2a2a] transition">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <h3 className="text-[15px] text-white font-medium truncate">{post.title}</h3>
-            {getDisplayStyleBadge(post.subsection.displayStyle)}
-            <span
-              className={`px-2 py-0.5 rounded text-[11px] shrink-0 ${
-                post.published
-                  ? 'bg-green-950/50 text-green-400'
-                  : 'bg-[#1a1a1a] text-[#707070]'
-              }`}
-            >
-              {post.published ? 'Published' : 'Draft'}
-            </span>
-          </div>
-          <div className="text-[13px] text-[#707070] mb-1">
-            {post.subsection.name} • {post.views} views
-            {post.subsection.displayStyle === 'PROJECT' && post.projectLink && (
-              <span className="ml-2">
-                • <a href={post.projectLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">View Project →</a>
+    <li
+      className="group relative flex items-center gap-[var(--admin-space-3)] border-b border-[color:var(--admin-border)] px-[var(--admin-space-2)] py-[var(--admin-space-3)] hover:bg-[color:var(--admin-hover)] focus-within:bg-[color:var(--admin-hover)]"
+      data-published={post.published ? 'true' : 'false'}
+      data-slot="post-row"
+    >
+      <StatusDot tone={post.published ? 'live' : 'draft'} />
+
+      <div className="min-w-0 flex-1">
+        <Link
+          aria-label={`Edit ${post.title}`}
+          className="block truncate text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)] outline-none after:absolute after:inset-0 after:content-[''] focus-visible:after:outline focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-[color:var(--admin-heading)]"
+          href={postEditPath(post.subsection.slug, post.slug)}
+        >
+          {post.title}
+        </Link>
+        <p className="mt-0.5 flex min-w-0 items-center gap-[6px] text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+          <TypeIcon aria-hidden="true" className="size-3.5 shrink-0" />
+          <span className="truncate">
+            {hierarchy}
+            {post.tags.length > 0 && (
+              <span className="font-[family-name:var(--admin-font-mono)]">
+                {' · '}
+                {post.tags
+                  .slice(0, 3)
+                  .map((tag) => `#${tag.name.toLowerCase()}`)
+                  .join(' ')}
               </span>
             )}
-          </div>
-          {post.tags && post.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {post.tags.slice(0, 3).map((tag) => (
-                <span
-                  key={tag.id}
-                  className="px-2 py-0.5 bg-[#1a1a1a] text-[#707070] rounded text-[11px]"
-                >
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap sm:flex-nowrap">
-          <button
-            onClick={() => onEdit(post)}
-            className="px-3 py-1.5 text-[13px] bg-[#1a1a1a] text-white hover:bg-[#2a2a2a] rounded-lg transition touch-manipulation"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => onTogglePublish(post)}
-            className="px-3 py-1.5 text-[13px] text-[#707070] hover:text-white transition touch-manipulation"
-          >
-            {post.published ? 'Unpublish' : 'Publish'}
-          </button>
-          <button
-            onClick={() => onDelete(post)}
-            className="px-3 py-1.5 text-[13px] text-red-400 hover:text-red-300 transition touch-manipulation"
-          >
-            Delete
-          </button>
-        </div>
+          </span>
+        </p>
       </div>
-    </div>
+
+      {now !== null && (
+        <span className="hidden shrink-0 text-[length:var(--admin-text-micro)] tabular-nums text-[color:var(--admin-subtle)] min-[700px]:block min-[850px]:group-hover:hidden min-[850px]:group-focus-within:hidden">
+          {formatRelativeTime(post.updatedAt, now)}
+        </span>
+      )}
+
+      <div className="relative z-10 flex shrink-0 items-center gap-[2px] min-[850px]:hidden min-[850px]:group-hover:flex min-[850px]:group-focus-within:flex">
+        <AdminButton loading={busy} onClick={() => onTogglePublish(post)} size="sm" variant="ghost">
+          {post.published ? 'Unpublish' : 'Publish'}
+          <span className="sr-only"> {post.title}</span>
+        </AdminButton>
+        {post.published && (
+          <Link
+            aria-label={`View ${post.title} on the public site`}
+            className={adminButtonClass({ className: 'max-[599px]:hidden', size: 'icon-sm', variant: 'ghost' })}
+            href={publicPostPath(post.subsection.slug, post.slug)}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <ArrowUpRightIcon aria-hidden="true" className="size-4" />
+          </Link>
+        )}
+        <AdminButton
+          aria-label={`Delete ${post.title}`}
+          className="hover:bg-[color:var(--admin-danger-bg)] hover:text-[color:var(--admin-danger)]"
+          onClick={() => onDelete(post)}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <TrashIcon aria-hidden="true" className="size-4" />
+        </AdminButton>
+      </div>
+    </li>
   );
 }

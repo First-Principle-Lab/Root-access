@@ -1,127 +1,200 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ContentLoader } from '../../ui/Spinner';
+import { ArrowUpRightIcon } from '@phosphor-icons/react';
+import { requestFailureMessage } from '@/src/lib/api';
+import { useAdminQuery } from '@/src/lib/adminQuery';
+import {
+  DASHBOARD_RECENT_REQUEST,
+  adminQueryKeys,
+  loadPosts,
+  loadStats,
+} from '@/src/lib/adminQueries';
+import { postEditPath } from '@/src/lib/postEditor';
+import type { PostListItem } from '@/src/types';
+import type { PostListRequest } from '@/src/lib/postFilters';
+import { adminButtonClass } from '@/src/components/ui/admin-button';
+import { AdminErrorState } from '@/src/components/ui/admin-state';
+import { PageHeader } from '@/src/components/ui/page-header';
+import { AdminSection } from '@/src/components/ui/admin-section';
+import { Skeleton } from '@/src/components/ui/skeleton';
+import { StatusDot } from '@/src/components/ui/status-label';
+import { buildOverviewRows } from './overviewRows';
+import { formatRelativeTime, publicPostPath } from './recentEdits';
 
-interface Stats {
-  sections: number;
-  subsections: number;
-  posts: number;
-  tags: number;
-}
+const DRAFTS_REQUEST: PostListRequest = { status: 'draft', limit: 5 };
 
 export function AdminDashboard() {
-  const router = useRouter();
-  const [stats, setStats] = useState<Stats>({
-    sections: 0,
-    subsections: 0,
-    posts: 0,
-    tags: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const stats = useAdminQuery(adminQueryKeys.stats, loadStats);
+  const recent = useAdminQuery(adminQueryKeys.posts(DASHBOARD_RECENT_REQUEST), () => loadPosts(DASHBOARD_RECENT_REQUEST));
+  const drafts = useAdminQuery(adminQueryKeys.posts(DRAFTS_REQUEST), () => loadPosts(DRAFTS_REQUEST));
+  /* "Now" for the relative dates, taken once when the screen mounts; Date.now() during render
+     is impure. */
+  const [now] = useState(() => Date.now());
 
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const response = await fetch('/api/admin/stats', {
-          credentials: 'include',
-        });
+  const viewSite = (
+    <Link className={adminButtonClass({ variant: 'secondary', size: 'sm' })} href="/" rel="noopener" target="_blank">
+      View site
+      <ArrowUpRightIcon aria-hidden="true" className="size-3.5" />
+    </Link>
+  );
 
-        if (response.ok) {
-          const data = await response.json();
-          setStats(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch stats:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchStats();
-  }, []);
+  const failed = stats.error !== undefined && stats.data === undefined;
 
-  const cards = [
-    { label: 'Sections', value: stats.sections, href: '/admin/sections', icon: '📁' },
-    { label: 'Subsections', value: stats.subsections, href: '/admin/subsections', icon: '📂' },
-    { label: 'Posts', value: stats.posts, href: '/admin/posts', icon: '📝' },
-    { label: 'Tags', value: stats.tags, href: '/admin/tags', icon: '🏷️' },
-  ];
+  return (
+    <>
+      <PageHeader actions={viewSite} title="Dashboard" />
 
-  if (loading) {
-    return <ContentLoader />;
+      {failed ? (
+        <AdminErrorState
+          message={requestFailureMessage(stats.error, 'The dashboard could not be reached. Check your connection and try again.')}
+          onRetry={() => {
+            void stats.refresh();
+            void recent.refresh();
+            void drafts.refresh();
+          }}
+          title="Counts could not be loaded"
+        />
+      ) : (
+        <>
+          <ul aria-label="Content counts" className="grid grid-cols-2 overflow-hidden rounded-[var(--admin-radius-panel)] border border-[color:var(--admin-border)] min-[600px]:grid-cols-3 min-[1000px]:grid-cols-5">
+            {stats.data
+              ? buildOverviewRows(stats.data).map((row) => (
+                  <li className="-mb-px -mr-px border-b border-r border-[color:var(--admin-border)]" key={row.key}>
+                  <Link
+                    className="flex h-full flex-col gap-[var(--admin-space-1)] p-[var(--admin-space-4)] hover:bg-[color:var(--admin-hover)]"
+                    href={row.href}
+                  >
+                    <span className="text-[length:var(--admin-text-micro)] font-medium uppercase tracking-[var(--admin-tracking-eyebrow)] text-[color:var(--admin-subtle)]">
+                      {row.label}
+                    </span>
+                    <span className="block text-[28px] font-semibold leading-none tracking-[var(--admin-tracking-title)] tabular-nums text-[color:var(--admin-heading)]">
+                      {row.value}
+                    </span>
+                    <span className="truncate text-[length:var(--admin-text-micro)] text-[color:var(--admin-muted)]">{row.hint}</span>
+                  </Link>
+                  </li>
+                ))
+              : Array.from({ length: 5 }, (_, index) => (
+                  <li
+                    className="-mb-px -mr-px flex flex-col gap-[var(--admin-space-2)] border-b border-r border-[color:var(--admin-border)] p-[var(--admin-space-4)]"
+                    key={index}
+                  >
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-7 w-10" />
+                    <Skeleton className="h-3 w-20" />
+                  </li>
+                ))}
+          </ul>
+
+          <div className="mt-[var(--admin-space-8)] grid gap-[var(--admin-space-8)] min-[1000px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+            <AdminSection
+              action={
+                <Link className="text-[length:var(--admin-text-meta)] text-[color:var(--admin-muted)] hover:text-[color:var(--admin-heading)]" href="/admin/posts">
+                  All posts
+                </Link>
+              }
+              title="Recently edited"
+            >
+              <PostRows
+                empty={
+                  <>
+                    Nothing has been saved yet.{' '}
+                    <Link className="text-[color:var(--admin-heading)] underline underline-offset-4" href="/admin/posts/new">
+                      Write a post
+                    </Link>
+                  </>
+                }
+                now={now}
+                posts={recent.data?.posts}
+              />
+            </AdminSection>
+
+            <AdminSection
+              action={
+                drafts.data && drafts.data.total > 0 ? (
+                  <Link
+                    className="text-[length:var(--admin-text-meta)] text-[color:var(--admin-muted)] hover:text-[color:var(--admin-heading)]"
+                    href="/admin/posts?status=draft"
+                  >
+                    {drafts.data.total} in total
+                  </Link>
+                ) : undefined
+              }
+              title="Drafts"
+            >
+              <PostRows compact empty="No drafts. Everything you have written is live." now={now} posts={drafts.data?.posts} />
+            </AdminSection>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function PostRows({
+  posts,
+  now,
+  empty,
+  compact = false,
+}: {
+  posts: PostListItem[] | undefined;
+  now: number;
+  empty: React.ReactNode;
+  compact?: boolean;
+}) {
+  if (!posts) {
+    return (
+      <ul aria-busy="true" aria-label="Loading posts">
+        {Array.from({ length: compact ? 3 : 5 }, (_, index) => (
+          <li className="flex items-center gap-[var(--admin-space-3)] border-t border-[color:var(--admin-border)] py-[var(--admin-space-3)] first:border-t-0" key={index}>
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-3 w-16" />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (posts.length === 0) {
+    return <p className="py-[var(--admin-space-3)] text-[length:var(--admin-text-meta)] text-[color:var(--admin-muted)]">{empty}</p>;
   }
 
   return (
-    <div>
-      <h1 className="text-2xl sm:text-[28px] font-normal text-white mb-6 sm:mb-8">Dashboard</h1>
-
-      <button
-        onClick={() => router.push('/')}
-        className="mb-6 sm:mb-8 w-full sm:w-auto px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition text-xs sm:text-[13px] font-medium touch-manipulation flex items-center justify-center gap-2"
-      >
-        <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-        </span>
-        Live
-      </button>
-
-      {/* Stats Grid - Responsive */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-        {cards.map((card) => (
-          <Link
-            key={card.label}
-            href={card.href}
-            className="bg-[#101010] p-4 sm:p-6 rounded-xl border border-[#1a1a1a] hover:border-[#2a2a2a] transition group"
-          >
-            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-              <span className="text-xl sm:text-2xl opacity-60 group-hover:opacity-80 transition">
-                {card.icon}
-              </span>
-              <div className="text-xs sm:text-[13px] text-[#707070] group-hover:text-[#e5e5e5] transition">
-                {card.label}
-              </div>
-            </div>
-            <div className="text-2xl sm:text-3xl font-light text-white">
-              {card.value}
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      {/* Quick Actions - Responsive */}
-      <div className="bg-[#101010] p-4 sm:p-6 rounded-xl border border-[#1a1a1a]">
-        <h2 className="text-base sm:text-[18px] font-normal text-white mb-3 sm:mb-4">Quick Actions</h2>
-        <div className="flex flex-wrap gap-2 sm:gap-3">
-          <Link
-            href="/admin/sections"
-            className="px-3 sm:px-4 py-2 bg-white text-[#0a0a0a] rounded-lg hover:opacity-90 transition text-xs sm:text-[13px] font-medium touch-manipulation"
-          >
-            Create Section
-          </Link>
-          <Link
-            href="/admin/subsections"
-            className="px-3 sm:px-4 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#2a2a2a] transition text-xs sm:text-[13px] font-medium touch-manipulation"
-          >
-            Create Subsection
-          </Link>
-          <Link
-            href="/admin/posts"
-            className="px-3 sm:px-4 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#2a2a2a] transition text-xs sm:text-[13px] font-medium touch-manipulation"
-          >
-            Create Post
-          </Link>
-          <Link
-            href="/"
-            target="_blank"
-            className="px-3 sm:px-4 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#2a2a2a] transition text-xs sm:text-[13px] font-medium touch-manipulation"
-          >
-            View Site →
-          </Link>
-        </div>
-      </div>
-    </div>
+    <ul>
+      {posts.map((post) => (
+        <li className="group relative flex items-center gap-[var(--admin-space-3)] border-t border-[color:var(--admin-border)] py-[var(--admin-space-3)] first:border-t-0" key={post.id}>
+          {!compact && <StatusDot tone={post.published ? 'live' : 'draft'} />}
+          <div className="min-w-0 flex-1">
+            <Link
+              aria-label={`Edit ${post.title}`}
+              className="block truncate text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)] after:absolute after:inset-0 after:content-['']"
+              href={postEditPath(post.subsection.slug, post.slug)}
+            >
+              {post.title}
+            </Link>
+            <p className="truncate text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
+              {post.subsection.name} · {formatRelativeTime(post.updatedAt, now)}
+            </p>
+          </div>
+          {post.published && (
+            <Link
+              aria-label={`View ${post.title} on the public site`}
+              className={adminButtonClass({
+                className: 'relative z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-[849px]:opacity-100',
+                size: 'icon-sm',
+                variant: 'ghost',
+              })}
+              href={publicPostPath(post.subsection.slug, post.slug)}
+              rel="noopener"
+              target="_blank"
+            >
+              <ArrowUpRightIcon aria-hidden="true" className="size-4" />
+            </Link>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }

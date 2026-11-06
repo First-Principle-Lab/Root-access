@@ -1,0 +1,167 @@
+<!doctype html>
+<html class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin mockup - Post editor</title>
+<link rel="stylesheet" href="admin-mock.css">
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') || 'dark';
+  document.documentElement.className = theme === 'light' ? '' : 'dark';
+  addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.admin-theme-label').forEach((el) => {
+      el.textContent = theme === 'light' ? 'Light theme' : 'Dark theme';
+    });
+  });
+</script>
+</head>
+<body class="admin-mock">
+
+<div class="admin-sidebar" id="admin-nav">
+  <a class="admin-brand" href="#">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+    Editing · parth.dev
+  </a>
+  <nav class="admin-nav" aria-label="Admin">
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Sections</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 9a2 2 0 0 1 2-2h3l2 2h9a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 4h8"/></svg>Subsections</a>
+    <a href="#" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 4h9l5 5v11H5z"/><path d="M14 4v5h5"/><path d="M8 13h8M8 17h6"/></svg>Posts</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg>Tags</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>Profile</a>
+  </nav>
+  <div class="admin-sidebar-foot">
+    <a class="admin-link-ext" href="/">View site
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+    </a>
+    <button class="admin-btn admin-btn--ghost" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l5 3"/></svg>
+      <span class="admin-theme-label">Dark theme</span>
+    </button>
+    <button class="admin-btn admin-btn--ghost" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M15 4h4v16h-4"/><path d="M11 8 7 12l4 4M7 12h9"/></svg>
+      Log out
+    </button>
+  </div>
+</div>
+
+<div class="admin-main" id="admin-main">
+  <header class="admin-topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="admin-menu-button" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="admin-nav">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <p class="admin-crumb">Posts <span aria-hidden="true">/</span> Built <span aria-hidden="true">/</span> Projects <span aria-hidden="true">/</span> <strong>NewsHog</strong></p>
+    </div>
+    <div class="admin-topbar-right">
+      <span class="admin-status admin-status--off">Draft</span>
+      <a class="admin-link-ext" href="/">View site
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <div class="admin-body" style="width:min(100%,var(--admin-editor-max))">
+    <div class="admin-page-head">
+      <div>
+        <h1 class="admin-page-title">Edit post</h1>
+        <p class="admin-page-desc">Appears under <strong style="color:var(--admin-heading)">/built/projects</strong> when published. Project posts link out to their URL instead of opening an article page.</p>
+      </div>
+      <button class="admin-btn admin-btn--secondary" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>
+        Preview
+      </button>
+    </div>
+
+    <div class="admin-notice admin-notice--success" style="margin-bottom:16px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      <span>Saved to the database 2 minutes ago. It is not live yet.</span>
+    </div>
+
+    <form autocomplete="off">
+      <div class="admin-fieldset" style="border:0;padding:0">
+        <div class="admin-field">
+          <label class="admin-label" for="f-title">Title</label>
+          <input class="admin-input" id="f-title" value="NewsHog: a terminal reader for HN">
+          <p class="admin-hint" id="f-title-help">Shown in lists, the article heading, and search results.</p>
+        </div>
+
+        <div class="admin-grid-2" style="margin-top:16px">
+          <div class="admin-field">
+            <label class="admin-label" for="f-sub">Subsection</label>
+            <select class="admin-select" id="f-sub"><option>Built &rsaquo; Projects</option><option>Engineering &rsaquo; Writing</option></select>
+            <p class="admin-hint">Decides the public URL and the display style.</p>
+          </div>
+          <div class="admin-field">
+            <label class="admin-label" for="f-year">Year</label>
+            <input class="admin-input admin-num" id="f-year" value="2026">
+          </div>
+        </div>
+
+        <div class="admin-field" style="margin-top:16px">
+          <label class="admin-label" for="f-desc">Description</label>
+          <textarea class="admin-textarea" id="f-desc" rows="2">Keyboard-driven Hacker News reader written in Go.</textarea>
+          <p class="admin-error">Description is required for writing posts.</p>
+        </div>
+
+        <fieldset class="admin-fieldset" style="margin-top:16px">
+          <legend class="admin-label" style="padding:0 6px">Project details <span class="admin-hint" style="font-weight:400">· only shown for project posts</span></legend>
+          <div class="admin-field">
+            <label class="admin-label" for="f-link">Project URL</label>
+            <input class="admin-input" id="f-link" value="https://github.com/parththirwani/newshog">
+          </div>
+          <div class="admin-field">
+            <label class="admin-label" for="f-cover">Cover image</label>
+            <input class="admin-input" id="f-cover" value="/uploads/newshog-cover.png">
+            <p class="admin-hint">Uploading&hellip; 64% &middot; 240 KB. 1.6:1 crops best in the project grid.</p>
+          </div>
+        </fieldset>
+
+        <div class="admin-field" style="margin-top:16px">
+          <label class="admin-label" for="f-content">Content (Markdown)</label>
+          <div style="display:flex;gap:4px;border:1px solid var(--admin-border-strong);border-bottom:0;border-radius:var(--admin-radius-control) var(--admin-radius-control) 0 0;padding:6px">
+            <button class="admin-btn admin-btn--ghost admin-btn--icon" type="button" aria-label="Bold"><b>B</b></button>
+            <button class="admin-btn admin-btn--ghost admin-btn--icon" type="button" aria-label="Italic"><i>I</i></button>
+            <button class="admin-btn admin-btn--ghost admin-btn--icon" type="button" aria-label="Heading">H2</button>
+            <button class="admin-btn admin-btn--ghost admin-btn--icon" type="button" aria-label="Link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg></button>
+            <button class="admin-btn admin-btn--ghost admin-btn--icon" type="button" aria-label="Insert image"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m5 19 5-5 3 3 3-3 3 3"/></svg></button>
+          </div>
+          <textarea class="admin-textarea" id="f-content" rows="9" style="border-radius:0 0 var(--admin-radius-control) var(--admin-radius-control)">## Why another HN reader
+
+Because I wanted to read from the terminal, with `j`/`k` and no mouse.
+
+- Tree view of comments
+- Offline cache</textarea>
+        </div>
+
+        <div class="admin-field" style="margin-top:16px">
+          <label class="admin-label" for="f-tags">Tags</label>
+          <input class="admin-input" id="f-tags" value="tooling, agents">
+          <p class="admin-hint">Comma separated. Unknown tags are created on save.</p>
+        </div>
+
+        <div class="admin-field" style="margin-top:16px">
+          <label class="admin-label" for="f-seo">Meta title</label>
+          <input class="admin-input" id="f-seo" placeholder="Defaults to the post title">
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="admin-savebar">
+    <p class="admin-meta" style="margin:0;display:flex;align-items:center;gap:8px">
+      <span style="width:8px;height:8px;border-radius:99px;background:var(--admin-warning);display:inline-block" aria-hidden="true"></span>
+      Unsaved changes in Content
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="admin-btn admin-btn--danger" type="button">Delete</button>
+      <button class="admin-btn admin-btn--secondary" type="button">Save draft</button>
+      <button class="admin-btn admin-btn--primary" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+        Publish
+      </button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

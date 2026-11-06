@@ -2,33 +2,35 @@ import { prisma } from "@/src/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/src/lib/authWrapper";
 
+interface StatsRow {
+  sections: number;
+  hiddenSections: number;
+  subsections: number;
+  hiddenSubsections: number;
+  published: number;
+  drafts: number;
+  tags: number;
+}
+
+/* Dashboard counts. All seven come back from one statement so the dashboard costs a single
+   round trip to the database instead of seven. */
 async function getHandler(req: NextRequest) {
   try {
-    const [sections, tags, postStats] = await Promise.all([
-      prisma.topCategory.findMany({
-        select: {
-          id: true,
-          _count: {
-            select: {
-              subsections: true,
-            },
-          },
-        },
-      }),
-      prisma.tag.count(),
-      prisma.post.count({
-        where: { published: true },
-      }),
-    ]);
+    const [row] = await prisma.$queryRaw<StatsRow[]>`
+      SELECT
+        (SELECT COUNT(*) FROM "TopCategory")::int                         AS "sections",
+        (SELECT COUNT(*) FROM "TopCategory" WHERE NOT "isVisible")::int   AS "hiddenSections",
+        (SELECT COUNT(*) FROM "Subsection")::int                          AS "subsections",
+        (SELECT COUNT(*) FROM "Subsection" WHERE NOT "isVisible")::int    AS "hiddenSubsections",
+        (SELECT COUNT(*) FROM "Post" WHERE "published")::int              AS "published",
+        (SELECT COUNT(*) FROM "Post" WHERE NOT "published")::int          AS "drafts",
+        (SELECT COUNT(*) FROM "Tag")::int                                 AS "tags"
+    `;
 
-    const totalSubsections = sections.reduce((sum, s) => sum + s._count.subsections, 0);
-
-    return NextResponse.json({
-      sections: sections.length,
-      subsections: totalSubsections,
-      posts: postStats,
-      tags,
-    }, { status: 200 });
+    return NextResponse.json(
+      { ...row, totalPosts: row.published + row.drafts },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("GET stats error:", error);
     return NextResponse.json(

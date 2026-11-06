@@ -24,6 +24,7 @@ model Profile {
   resumeUrl       String?
   instagramLink   String?
   linkedinLink    String?
+  githubLink      String?
   bio             String?
   adminId         String  @unique
   profilePicture  String?

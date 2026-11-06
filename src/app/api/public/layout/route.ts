@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
               xLink: true,
               instagramLink: true,
               linkedinLink: true,
+              githubLink: true,
               email: true,
               resumeUrl: true,
               profilePicture: true, 

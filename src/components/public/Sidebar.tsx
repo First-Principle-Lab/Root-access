@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { GitHubMarkIcon } from './GitHubMarkIcon';
+import { resolveGithubUrl } from '@/src/lib/githubLink';
 
 interface TopCategory {
   id: string;
@@ -23,6 +24,7 @@ interface Profile {
   xLink: string | null;
   instagramLink: string | null;
   linkedinLink: string | null;
+  githubLink: string | null;
   email: string | null;
   resumeUrl: string | null;
   profilePicture: string | null;
@@ -239,7 +241,7 @@ export function PublicSidebar() {
               </Link>
             )}
             <Link
-              href="https://github.com/parththirwani"
+              href={resolveGithubUrl(layoutData.admin.profile)}
               target="_blank"
               rel="noopener noreferrer"
               className="text-neutral-600 hover:text-neutral-400 transition"

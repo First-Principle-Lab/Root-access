@@ -31,31 +31,35 @@ export function calculateReadTime(content: string, wordsPerMinute: number = 200)
  * @returns Array of tag connection objects
  */
 export async function handleTags(tags: string[], prisma: any): Promise<{ id: string }[]> {
-  const tagConnections: { id: string }[] = [];
-
   if (!tags || tags.length === 0) {
-    return tagConnections;
+    return [];
   }
 
+  // Uppercase, trimmed and de-duplicated, so "rust, Rust" is one tag.
+  const wanted = new Map<string, string>();
   for (const tagName of tags) {
-    // Convert to uppercase and trim
     const upperTagName = tagName.trim().toUpperCase();
-
-    const tagSlug = generateSlug(upperTagName);
-
-    const tag = await prisma.tag.upsert({
-      where: { slug: tagSlug },
-      update: {}, 
-      create: {
-        name: upperTagName,
-        slug: tagSlug,
-      },
-    });
-
-    tagConnections.push({ id: tag.id });
+    if (upperTagName) wanted.set(generateSlug(upperTagName), upperTagName);
+  }
+  if (wanted.size === 0) {
+    return [];
   }
 
-  return tagConnections;
+  // Two round trips however many tags there are: create the missing ones, then read them all
+  // back. A tag that already exists under the same name keeps its row.
+  await prisma.tag.createMany({
+    data: [...wanted].map(([slug, name]) => ({ name, slug })),
+    skipDuplicates: true,
+  });
+
+  const rows: { id: string }[] = await prisma.tag.findMany({
+    where: {
+      OR: [{ slug: { in: [...wanted.keys()] } }, { name: { in: [...wanted.values()] } }],
+    },
+    select: { id: true },
+  });
+
+  return rows.map(({ id }) => ({ id }));
 }
 /**
  * Generate excerpt from content if not provided
