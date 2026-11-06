@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowLeftIcon, CircleNotchIcon } from '@phosphor-icons/react';
-import { ThemeToggleButton } from '../../spaceui/theme-toggle';
+import { AdminThemeToggle } from '../shell/AdminThemeToggle';
 
 export function AdminAuthShell({
   title,
@@ -19,7 +19,7 @@ export function AdminAuthShell({
         <Link href="/" className="text-[length:var(--admin-text-panel-title)] font-medium tracking-[var(--admin-tracking-title)] text-[color:var(--admin-heading)]">
           Root Access <span className="ml-2 text-[length:var(--admin-text-micro)] uppercase tracking-[var(--admin-tracking-eyebrow)] text-[color:var(--admin-subtle)]">admin</span>
         </Link>
-        <ThemeToggleButton buttonVariant="ghost" size="icon" title="Toggle color scheme" />
+        <AdminThemeToggle />
       </header>
 
       <main className="flex flex-1 items-center justify-center px-[var(--admin-gutter)] py-[var(--admin-space-12)]">

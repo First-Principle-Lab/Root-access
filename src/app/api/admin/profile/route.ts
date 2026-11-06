@@ -18,7 +18,8 @@ async function getHandler(req: NextRequest) {
         githubLink: true,
         email: true,
         resumeUrl: true,
-        profilePicture: true, 
+        profilePicture: true,
+        admin: { select: { name: true } },
       },
     });
 
@@ -29,7 +30,8 @@ async function getHandler(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ profile }, { status: 200 });
+    const { admin, ...rest } = profile;
+    return NextResponse.json({ profile: { ...rest, name: admin.name } }, { status: 200 });
   } catch (error) {
     console.error("GET profile error:", error);
     return NextResponse.json(

@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowSquareOutIcon,
+  ArrowUpRightIcon,
   PencilSimpleIcon,
   PlusIcon,
   TrashIcon,
 } from '@phosphor-icons/react';
 import { adminApi, requestFailureMessage } from '@/src/lib/api';
-import { ContentTypeBadge } from '@/src/components/admin/contentTypeBadge';
+import { useAdminQuery } from '@/src/lib/adminQuery';
+import { adminQueryKeys, invalidateAfter, loadSections } from '@/src/lib/adminQueries';
 import { CONTENT_TYPES, contentTypeFor } from '@/src/components/admin/contentTypes';
-import type { Subsection, TopCategory } from '@/src/types';
+import type { Subsection } from '@/src/types';
 import { cn } from '@/src/lib/cn';
 import { AdminButton, adminButtonClass } from '@/src/components/ui/admin-button';
 import {
@@ -70,9 +71,14 @@ const EMPTY_FORM = {
    subsections), the three filters sit in the same row they sit in on Posts, and every control is a
    checkpoint-4 primitive. */
 export function SubsectionsManager() {
-  const [sections, setSections] = useState<TopCategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const sectionsQuery = useAdminQuery(adminQueryKeys.sections, loadSections);
+  const sections = useMemo(() => sectionsQuery.data ?? [], [sectionsQuery.data]);
+  const loading = sectionsQuery.isLoading;
+  const loadError =
+    sectionsQuery.data === undefined && sectionsQuery.error !== undefined
+      ? requestFailureMessage(sectionsQuery.error, 'Subsections could not be reached. Check your connection and try again.')
+      : '';
+  const fetchData = () => void sectionsQuery.refresh();
   const [filters, setFilters] = useState<SubsectionFilterState>(EMPTY_SUBSECTION_FILTERS);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -82,26 +88,6 @@ export function SubsectionsManager() {
   const [pendingDelete, setPendingDelete] = useState<Subsection | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-
-  useEffect(() => {
-    void fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const res = (await adminApi.getSections()) as { sections: TopCategory[] };
-      setSections(res.sections);
-    } catch (err) {
-      setSections([]);
-      setLoadError(
-        requestFailureMessage(err, 'Subsections could not be reached. Check your connection and try again.'),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const { groups, matched, total } = useMemo(() => groupSubsections(sections, filters), [sections, filters]);
 
@@ -143,7 +129,7 @@ export function SubsectionsManager() {
         await adminApi.createSubsection(formData);
       }
       closeForm();
-      void fetchData();
+      invalidateAfter.structure();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the subsection.');
     } finally {
@@ -161,7 +147,7 @@ export function SubsectionsManager() {
     try {
       await adminApi.deleteSubsection(pendingDelete.slug);
       setPendingDelete(null);
-      void fetchData();
+      invalidateAfter.structure();
     } catch (err) {
       setDeleteError(
         `${pendingDelete.name} was not deleted. ${
@@ -188,7 +174,6 @@ export function SubsectionsManager() {
           </AdminButton>
         )
       }
-      description="The middle of the hierarchy: a section holds subsections, a subsection holds posts, and each subsection is one page of the public site."
       title="Subsections"
     />
   );
@@ -420,21 +405,19 @@ export function SubsectionsManager() {
           {groups.map(({ section, subsections }) => (
             <section aria-label={`${section.name} subsections`} key={section.id}>
               <div className="mb-[var(--admin-space-2)] flex flex-wrap items-center gap-[var(--admin-space-2)]">
-                <h2 className="text-[length:var(--admin-text-panel-title)] font-semibold text-[color:var(--admin-heading)]">
+                <h2 className="text-[length:var(--admin-text-micro)] font-medium uppercase tracking-[var(--admin-tracking-eyebrow)] text-[color:var(--admin-subtle)]">
                   {section.name}
                 </h2>
-                <StatusLabel tone={section.isVisible ? 'live' : 'neutral'}>
-                  {section.isVisible ? 'Section visible' : 'Section hidden'}
-                </StatusLabel>
+                {!section.isVisible && <StatusLabel tone="hidden">Section hidden</StatusLabel>}
                 <span className="text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
                   {subsections.length} {subsections.length === 1 ? 'subsection' : 'subsections'}
                 </span>
               </div>
 
-              <ul className="flex flex-col overflow-hidden rounded-[var(--admin-radius-panel)] border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)]">
+              <ul className="border-t border-[color:var(--admin-border)]">
                 {subsections.map((subsection) => (
                   <li
-                    className="flex flex-wrap items-center gap-[var(--admin-space-3)] border-t border-[color:var(--admin-border)] px-[var(--admin-space-5)] py-[var(--admin-space-3)] transition-colors first:border-t-0 hover:bg-[color:var(--admin-hover)] focus-within:bg-[color:var(--admin-hover)]"
+                    className="flex items-center gap-[var(--admin-space-3)] border-b border-[color:var(--admin-border)] px-[var(--admin-space-2)] py-[var(--admin-space-3)] hover:bg-[color:var(--admin-hover)] focus-within:bg-[color:var(--admin-hover)]"
                     key={subsection.id}
                   >
                     {/* Stored subsection data (edited with the EmojiPicker), not chrome. */}
@@ -446,15 +429,12 @@ export function SubsectionsManager() {
                         <span className="truncate text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)]">
                           {subsection.name}
                         </span>
-                        <StatusLabel tone={subsection.isVisible ? 'live' : 'neutral'}>
-                          {subsection.isVisible ? 'Visible' : 'Hidden'}
-                        </StatusLabel>
-                        <ContentTypeBadge displayStyle={subsection.displayStyle} />
+                        {!subsection.isVisible && <StatusLabel tone="hidden">Hidden</StatusLabel>}
                       </div>
                       <span className="mt-0.5 block text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
-                        {subsection.postCount} {subsection.postCount === 1 ? 'post' : 'posts'}
-                        {' · /'}
-                        {subsection.slug}
+                        {contentTypeFor(subsection.displayStyle).label} · {subsection.postCount}{' '}
+                        {subsection.postCount === 1 ? 'post' : 'posts'} ·{' '}
+                        <span className="font-[family-name:var(--admin-font-mono)]">/{subsection.slug}</span>
                       </span>
                     </div>
 
@@ -471,7 +451,7 @@ export function SubsectionsManager() {
                           rel="noopener"
                           target="_blank"
                         >
-                          <ArrowSquareOutIcon aria-hidden="true" className="size-4" />
+                          <ArrowUpRightIcon aria-hidden="true" className="size-4" />
                         </Link>
                       )}
                       <AdminButton
@@ -488,11 +468,11 @@ export function SubsectionsManager() {
                           setDeleteError('');
                           setPendingDelete(subsection);
                         }}
-                        size="sm"
-                        variant="danger"
+size="icon-sm"
+                        variant="ghost"
+                        className="hover:bg-[color:var(--admin-danger-bg)] hover:text-[color:var(--admin-danger)]"
                       >
                         <TrashIcon aria-hidden="true" className="size-4" />
-                        Delete
                       </AdminButton>
                     </div>
                   </li>

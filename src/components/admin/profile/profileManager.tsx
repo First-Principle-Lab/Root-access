@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ImageSquareIcon, TrashIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 import { adminApi, requestFailureMessage } from '@/src/lib/api';
+import { useAdminQuery } from '@/src/lib/adminQuery';
+import { adminQueryKeys, invalidateAfter, loadProfile } from '@/src/lib/adminQueries';
 import type { Profile } from '@/src/types';
 import { AdminButton } from '@/src/components/ui/admin-button';
 import { AdminField, AdminInput, AdminTextarea } from '@/src/components/ui/admin-field';
@@ -61,8 +63,6 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export function ProfileManager() {
   const [values, setValues] = useState<ProfileFormValues>(EMPTY_PROFILE_FORM);
   const [saved, setSaved] = useState<ProfileFormValues>(EMPTY_PROFILE_FORM);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<ProfileFieldKey, string>>>({});
   const [formError, setFormError] = useState('');
   const [savedNotice, setSavedNotice] = useState('');
@@ -71,26 +71,22 @@ export function ProfileManager() {
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchProfile = async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const res = (await adminApi.getProfile()) as { profile: Profile };
-      const next = profileFormFromProfile(res.profile);
-      setValues(next);
-      setSaved(next);
-    } catch (err) {
-      setLoadError(
-        requestFailureMessage(err, 'Your profile could not be reached. Check your connection and try again.'),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void fetchProfile();
-  }, []);
+  const profileQuery = useAdminQuery(adminQueryKeys.profile, loadProfile);
+  /* The form is seeded once from whatever the cache holds (instantly on a revisit), so a
+     background refresh can never overwrite what is being typed. */
+  const [seeded, setSeeded] = useState(false);
+  if (profileQuery.data && !seeded) {
+    const next = profileFormFromProfile(profileQuery.data);
+    setSeeded(true);
+    setValues(next);
+    setSaved(next);
+  }
+  const loading = !seeded && profileQuery.isLoading;
+  const loadError =
+    !seeded && profileQuery.error !== undefined
+      ? requestFailureMessage(profileQuery.error, 'Your profile could not be reached. Check your connection and try again.')
+      : '';
+  const fetchProfile = () => void profileQuery.refresh();
 
   const setField = (key: ProfileFieldKey, value: string) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -160,6 +156,7 @@ export function ProfileManager() {
       setValues(next);
       setSaved(next);
       setSavedNotice('Profile saved.');
+      invalidateAfter.profile();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Your profile could not be saved.');
     } finally {
@@ -174,10 +171,7 @@ export function ProfileManager() {
   if (loadError) {
     return (
       <>
-        <PageHeader
-          description="The picture, bio and links the public site reads from here."
-          title="Profile"
-        />
+        <PageHeader title="Profile" />
         <AdminErrorState message={loadError} onRetry={fetchProfile} title="Profile could not be loaded" />
       </>
     );
@@ -187,10 +181,7 @@ export function ProfileManager() {
 
   return (
     <>
-      <PageHeader
-        description="The picture, bio and links the public site reads from here. Every field is optional except the ones the public sidebar already shows."
-        title="Profile"
-      />
+      <PageHeader title="Profile" />
 
       <form
         className="flex flex-col gap-[var(--admin-space-5)]"

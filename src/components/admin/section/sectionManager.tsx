@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { PencilSimpleIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react';
-import { adminApi } from '@/src/lib/api';
+import { adminApi, requestFailureMessage } from '@/src/lib/api';
+import { useAdminQuery } from '@/src/lib/adminQuery';
+import { adminQueryKeys, invalidateAfter, loadSections } from '@/src/lib/adminQueries';
 import { TopCategory } from '@/src/types';
 import { AdminButton } from '@/src/components/ui/admin-button';
 import { AdminEmptyState, AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-state';
@@ -23,9 +25,14 @@ import { StatusLabel } from '@/src/components/ui/status-label';
 const EMPTY_FORM = { name: '', isVisible: true };
 
 export function SectionsManager() {
-  const [sections, setSections] = useState<TopCategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const sectionsQuery = useAdminQuery(adminQueryKeys.sections, loadSections);
+  const sections = sectionsQuery.data ?? [];
+  const loading = sectionsQuery.isLoading;
+  const loadError =
+    sectionsQuery.data === undefined && sectionsQuery.error !== undefined
+      ? requestFailureMessage(sectionsQuery.error, 'Could not load sections.')
+      : '';
+  const fetchSections = () => void sectionsQuery.refresh();
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -34,24 +41,6 @@ export function SectionsManager() {
   const [pendingDelete, setPendingDelete] = useState<TopCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-
-  useEffect(() => {
-    void fetchSections();
-  }, []);
-
-  const fetchSections = async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const res = (await adminApi.getSections()) as { sections: TopCategory[] };
-      setSections(res.sections);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Could not load sections.');
-      setSections([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const closeForm = () => {
     setShowForm(false);
@@ -85,7 +74,7 @@ export function SectionsManager() {
         await adminApi.createSection(formData);
       }
       closeForm();
-      void fetchSections();
+      invalidateAfter.structure();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the section.');
     } finally {
@@ -100,7 +89,7 @@ export function SectionsManager() {
     try {
       await adminApi.deleteSection(pendingDelete.id);
       setPendingDelete(null);
-      void fetchSections();
+      invalidateAfter.structure();
     } catch (err) {
       setDeleteError(
         `${pendingDelete.name} was not deleted. ${
@@ -120,7 +109,7 @@ export function SectionsManager() {
   if (loadError) {
     return (
       <>
-        <PageHeader description="The top level of the site navigation." title="Sections" />
+        <PageHeader title="Sections" />
         <AdminErrorState
           message={loadError}
           onRetry={fetchSections}
@@ -141,8 +130,7 @@ export function SectionsManager() {
             </AdminButton>
           )
         }
-        description="The top level of the site navigation. Each section holds subsections, and each subsection holds posts."
-        title="Sections"
+                title="Sections"
       />
 
       {deleteError && (
@@ -210,10 +198,10 @@ export function SectionsManager() {
           title="No sections yet"
         />
       ) : (
-        <ul className="flex flex-col overflow-hidden rounded-[var(--admin-radius-panel)] border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)]">
+        <ul className="border-t border-[color:var(--admin-border)]">
           {sections.map((section) => (
             <li
-              className="flex flex-wrap items-center gap-[var(--admin-space-3)] border-t border-[color:var(--admin-border)] px-[var(--admin-space-5)] py-[var(--admin-space-3)] transition-colors first:border-t-0 hover:bg-[color:var(--admin-hover)] focus-within:bg-[color:var(--admin-hover)]"
+              className="flex items-center gap-[var(--admin-space-3)] border-b border-[color:var(--admin-border)] px-[var(--admin-space-2)] py-[var(--admin-space-3)] hover:bg-[color:var(--admin-hover)] focus-within:bg-[color:var(--admin-hover)]"
               key={section.id}
             >
               <div className="min-w-0 flex-1">
@@ -221,9 +209,7 @@ export function SectionsManager() {
                   <span className="truncate text-[length:var(--admin-text-body)] font-medium text-[color:var(--admin-heading)]">
                     {section.name}
                   </span>
-                  <StatusLabel tone={section.isVisible ? 'live' : 'neutral'}>
-                    {section.isVisible ? 'Visible' : 'Hidden'}
-                  </StatusLabel>
+                  {!section.isVisible && <StatusLabel tone="hidden">Hidden</StatusLabel>}
                 </div>
                 <span className="mt-0.5 block text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]">
                   {section.subsections?.length || 0}{' '}
@@ -246,11 +232,11 @@ export function SectionsManager() {
                     setDeleteError('');
                     setPendingDelete(section);
                   }}
-                  size="sm"
-                  variant="danger"
+size="icon-sm"
+                  variant="ghost"
+                  className="hover:bg-[color:var(--admin-danger-bg)] hover:text-[color:var(--admin-danger)]"
                 >
                   <TrashIcon aria-hidden="true" className="size-4" />
-                  Delete
                 </AdminButton>
               </div>
             </li>

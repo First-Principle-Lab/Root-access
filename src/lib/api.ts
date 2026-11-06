@@ -1,5 +1,3 @@
-// src/lib/api.ts (UPDATED)
-
 import { buildPostListSearchParams, type PostListRequest } from './postFilters';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -13,6 +11,19 @@ async function fetcher<T>(url: string, options?: RequestInit): Promise<T> {
       ...options?.headers,
     },
   });
+
+  // A session that expired while a screen was open: go back to the login form rather than
+  // showing "Unauthorized" in whatever panel made the request.
+  if (
+    res.status === 401 &&
+    url.startsWith('/api/admin/') &&
+    url !== '/api/admin/login' &&
+    typeof window !== 'undefined' &&
+    window.location.pathname.startsWith('/admin') &&
+    window.location.pathname !== '/admin/login'
+  ) {
+    window.location.assign('/admin/login');
+  }
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: 'Something went wrong' }));

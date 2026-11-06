@@ -37,3 +37,21 @@ export function StatusLabel({ tone, icon: Icon, className, children, ...props }:
     </span>
   );
 }
+
+const DOT_TONE = {
+  live: 'bg-[color:var(--admin-success)]',
+  draft: 'bg-transparent ring-1 ring-inset ring-[color:var(--admin-subtle)]',
+  hidden: 'bg-[color:var(--admin-warning)]',
+} as const;
+
+const DOT_LABEL = { live: 'Live', draft: 'Draft', hidden: 'Hidden' } as const;
+
+/** A 8px state marker for dense rows; the state is still spoken to screen readers. */
+export function StatusDot({ tone, className }: { tone: keyof typeof DOT_TONE; className?: string }): React.ReactElement {
+  return (
+    <span className={cn('inline-flex shrink-0 items-center', className)} title={DOT_LABEL[tone]}>
+      <span aria-hidden="true" className={cn('size-2 rounded-full', DOT_TONE[tone])} />
+      <span className="sr-only">{DOT_LABEL[tone]}</span>
+    </span>
+  );
+}

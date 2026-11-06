@@ -1,26 +1,27 @@
 'use client';
 
-import { ArrowsClockwiseIcon, CircleNotchIcon } from '@phosphor-icons/react';
+import { ArrowsClockwiseIcon } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
 import { cn } from '@/src/lib/cn';
 import { AdminButton } from '@/src/components/ui/admin-button';
-
-/* Loading / empty / error states (checkpoint 4 of docs/admin-redesign-plan.md).
-   The baseline rendered `ContentLoader` (a white arc on a #2a2a2a ring from
-   src/components/ui/Spinner.tsx) for every admin screen and, for a failed list request,
-   simply showed an empty list — the failure was invisible. `AdminErrorState` is the one place
-   an admin list can say "this did not load" and offer a retry. */
+import { Skeleton } from '@/src/components/ui/skeleton';
 
 export function AdminLoadingState({ label = 'Loading', className }: { label?: string; className?: string }): React.ReactElement {
   return (
-    <div
-      aria-busy="true"
-      className={cn('flex items-center justify-center gap-[var(--admin-space-2)] py-[var(--admin-space-12)] text-[color:var(--admin-muted)]', className)}
-      data-slot="admin-loading-state"
-      role="status"
-    >
-      <CircleNotchIcon aria-hidden="true" className="size-4 animate-spin" />
-      <span className="text-[length:var(--admin-text-meta)]">{label}</span>
+    <div aria-busy="true" className={className} data-slot="admin-loading-state" role="status">
+      <span className="sr-only">{label}</span>
+      <div className="mb-[var(--admin-space-6)] flex items-center justify-between">
+        <Skeleton className="h-7 w-40" />
+        <Skeleton className="h-8 w-28" />
+      </div>
+      <ul className="border-t border-[color:var(--admin-border)]">
+        {Array.from({ length: 6 }, (_, index) => (
+          <li className="flex items-center gap-[var(--admin-space-3)] border-b border-[color:var(--admin-border)] px-[var(--admin-space-2)] py-[14px]" key={index}>
+            <Skeleton className="h-4 max-w-[280px] flex-1" />
+            <Skeleton className="ml-auto h-3 w-20" />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

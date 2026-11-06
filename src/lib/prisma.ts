@@ -11,11 +11,14 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is not defined');
 }
 
-const pool = globalForPrisma.pool ?? new Pool({ 
+// A single connection made every Promise.all of queries run one after another. A few
+// connections let a request's queries overlap, and idle ones are released so a warm
+// serverless instance does not hold Supabase connections it is not using.
+const pool = globalForPrisma.pool ?? new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 1, 
-  idleTimeoutMillis: 0,
-  connectionTimeoutMillis: 10000, 
+  max: Number(process.env.DATABASE_POOL_MAX) || 3,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 10000,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 

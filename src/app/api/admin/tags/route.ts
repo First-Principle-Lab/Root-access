@@ -67,14 +67,19 @@ async function postHandler(req: NextRequest) {
 
 async function getHandler(req: NextRequest) {
   try {
-    const tags = await prisma.tag.findMany({
-      include: {
-        posts: true
+    // The tags screen only needs how many posts carry each tag, not the posts themselves.
+    const rows = await prisma.tag.findMany({
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        _count: { select: { posts: true } }
       },
       orderBy: {
         createdAt: "desc"
       }
     });
+    const tags = rows.map(({ _count, ...tag }) => ({ ...tag, postCount: _count.posts }));
     return NextResponse.json(
       { message: "Tags retrieved", tags: tags },
       { status: 200 }

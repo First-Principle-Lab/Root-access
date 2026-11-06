@@ -3,10 +3,8 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { adminApi } from '@/src/lib/api';
-import { useAuth } from '@/src/contexts/authContext';
+import { clearAdminQueries } from '@/src/lib/adminQuery';
 import { useFocusTrap } from '@/src/hooks/useFocusTrap';
-import { FullScreenLoader } from '../ui/Spinner';
-import { isAuthScreenPath } from './shell/adminNav';
 import { AdminSidebar } from './shell/AdminSidebar';
 import { AdminTopBar } from './shell/AdminTopBar';
 
@@ -17,20 +15,9 @@ interface AdminLayoutProps {
 export function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, isLoading, checkAuth } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navPathname, setNavPathname] = useState(pathname);
   const drawerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (isAuthScreenPath(pathname)) {
-      return;
-    }
-
-    if (!isLoading && !isAuthenticated) {
-      router.push('/admin/login');
-    }
-  }, [isAuthenticated, isLoading, pathname, router]);
 
   // "Adjust state during render" (react.dev): the drawer must never survive a
   // navigation, without the set-state-in-effect lint this would trigger.
@@ -54,25 +41,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const handleLogout = async () => {
     try {
       await adminApi.logout();
-      await checkAuth();
-      router.push('/admin/login');
+      clearAdminQueries();
+      router.replace('/admin/login');
+      router.refresh();
     } catch (error) {
       console.error('Logout failed:', error);
     }
   };
 
-  if (isLoading) {
-    return <FullScreenLoader />;
-  }
-
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  // The token/cursor scope itself is the single `.admin-shell` element rendered by
-  // src/app/admin/layout.tsx (the route-level layout, which also covers /admin/login and
-  // /admin/signup); this div is only the authenticated chrome inside it, so it must not
-  // repeat that class or every admin page would nest two shells.
+  // `.admin-shell` (tokens, cursor rules) is rendered once by src/app/admin/layout.tsx; this is
+  // only the signed-in chrome inside it.
   return (
     <div className="admin-layout min-h-screen">
       <a
@@ -86,10 +64,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         pathname={pathname}
         menuOpen={mobileMenuOpen}
         onToggleMenu={() => setMobileMenuOpen((open) => !open)}
-        onLogout={handleLogout}
       />
 
-      <aside className="max-[849px]:hidden fixed bottom-0 left-0 top-[var(--admin-header-h)] z-20 w-[var(--admin-sidebar-w)]">
+      <aside className="max-[849px]:hidden fixed bottom-0 left-0 top-0 z-20 w-[var(--admin-sidebar-w)]">
         <AdminSidebar pathname={pathname} onLogout={handleLogout} />
       </aside>
 
@@ -119,9 +96,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       <main
         id="admin-main"
         tabIndex={-1}
-        className="min-h-screen pt-[var(--admin-header-h)] outline-none min-[850px]:pl-[var(--admin-sidebar-w)]"
+        className="min-h-screen pt-[var(--admin-header-h)] outline-none min-[850px]:pl-[var(--admin-sidebar-w)] min-[850px]:pt-0"
       >
-        <div className="px-[var(--admin-gutter)] py-[var(--admin-space-6)]">{children}</div>
+        <div className="mx-auto w-full max-w-[var(--admin-shell-max)] px-[var(--admin-gutter)] pb-[var(--admin-space-12)] pt-[var(--admin-space-6)] min-[850px]:pt-[var(--admin-space-8)]">
+          {children}
+        </div>
       </main>
     </div>
   );

@@ -42,7 +42,7 @@ const controlClasses =
 function controlBorder(invalid: boolean): string {
   return invalid
     ? 'border-[color:var(--admin-danger)]'
-    : 'border-[color:var(--admin-border-strong)] hover:border-[color:var(--admin-heading)]';
+    : 'border-[color:var(--admin-border-strong)] hover:border-[color:var(--admin-subtle)] focus:border-[color:var(--admin-heading)]';
 }
 
 interface AdminFieldProps {
@@ -85,10 +85,12 @@ export function AdminField({
         </label>
         {aside}
       </div>
-      <AdminFieldContext.Provider value={{ controlId, errorId, hintId, invalid: Boolean(error) }}>
-        {children}
-      </AdminFieldContext.Provider>
-      {hint && !error && (
+        {/* While an error shows, the hint text is not rendered, so its id must not stay in the
+            describedby list: every id on a control has to resolve. */}
+        <AdminFieldContext.Provider value={{ controlId, errorId, hintId: error ? undefined : hintId, invalid: Boolean(error) }}>
+          {children}
+        </AdminFieldContext.Provider>
+        {hint && !error && (
         <p className="text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]" id={hintId}>
           {hint}
         </p>

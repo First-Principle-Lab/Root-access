@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftIcon, ArrowSquareOutIcon, ImageSquareIcon, UploadSimpleIcon, XIcon } from '@phosphor-icons/react';
 import { adminApi, requestFailureMessage } from '@/src/lib/api';
+import { invalidateAfter } from '@/src/lib/adminQueries';
 import { contentTypeFor, contentTypeKey } from '@/src/components/admin/contentTypes';
 import { ContentTypeBadge } from '@/src/components/admin/contentTypeBadge';
 import type { Post, TopCategory } from '@/src/types';
@@ -72,6 +73,7 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [pendingPublish, setPendingPublish] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverError, setCoverError] = useState('');
   const [leaveTarget, setLeaveTarget] = useState<string | null>(null);
@@ -250,6 +252,7 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
         /* The draft is no longer at risk, so the unsaved-changes guard must not fire on the way to
            the address the new post actually lives at. */
         setSaved(draft);
+        invalidateAfter.post();
         router.push(href);
         return;
       }
@@ -261,6 +264,7 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
       setPost(res.post);
       setSaved(draft);
       setPublished(res.post.published);
+      invalidateAfter.post();
 
       /* Renaming a post renames its address: the PUT route regenerates the slug from the title, so
          the editor has to move with it or a reload lands on "post not found". That navigation
@@ -282,8 +286,12 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
   };
 
   /* Publish/unpublish is its own explicit action rather than a checkbox that only takes effect on
-     save: it is a PATCH on the post, so a person can publish without touching the text. */
-  const handleTogglePublish = async () => {
+     save: it is a PATCH on the post, so a person can publish without touching the text. Because
+     that PATCH acts on the *saved* version, clicking it with edits still in the editor would put
+     the old text live while the newest words sit in component state - so dirty is a question, not
+     an action: the dialog names what will actually be published, and Confirm only then issues the
+     request. With nothing unsaved, publish/unpublish runs straight away. */
+  const performTogglePublish = async () => {
     if (!post) return;
     setFormError('');
     setNotice('');
@@ -291,6 +299,7 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
     try {
       await adminApi.togglePublish(post.subsection.slug, post.slug, !published);
       setPublished(!published);
+      invalidateAfter.post();
       setNotice(
         published
           ? `“${post.title}” is no longer on the public site. It is still a draft you can keep editing.`
@@ -305,6 +314,15 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
     } finally {
       setPublishing(false);
     }
+  };
+
+  const handleTogglePublish = () => {
+    if (!post) return;
+    if (dirty) {
+      setPendingPublish(true);
+      return;
+    }
+    void performTogglePublish();
   };
 
   const hierarchy = post
@@ -697,6 +715,24 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
             router.push(href);
           }}
           title="Leave without saving?"
+        />
+      )}
+
+      {/* Publish acts on the last saved version, so with unsaved changes it must say that rather
+          than quietly applying to older text. Confirm runs the same PATCH a clean click would. */}
+      {pendingPublish && post && (
+        <ConfirmDialog
+          busy={publishing}
+          cancelLabel="Back to editing"
+          confirmLabel={published ? 'Unpublish saved version' : 'Publish saved version'}
+          description="Your unsaved changes are not part of it and stay in this editor - save them first if they must go live with the post."
+          itemName={post.title}
+          onCancel={() => setPendingPublish(false)}
+          onConfirm={() => {
+            setPendingPublish(false);
+            void performTogglePublish();
+          }}
+          title="The saved version changes first"
         />
       )}
     </div>
