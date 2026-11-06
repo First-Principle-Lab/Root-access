@@ -93,7 +93,7 @@ test.describe('admin profile GitHub field', () => {
     await page.goto('/admin/profile');
     await expect(githubField(page)).toBeEditable();
     await githubField(page).fill('github.com/parththirwani');
-    await expect(page.getByText('Unsaved changes')).toBeVisible();
+    await expect(page.locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'Unsaved changes');
     await page.getByRole('button', { name: 'Save profile' }).click();
 
     await expect(githubField(page)).toHaveAttribute('aria-invalid', 'true');

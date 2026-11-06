@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftIcon, ArrowSquareOutIcon, ImageSquareIcon, UploadSimpleIcon, XIcon } from '@phosphor-icons/react';
+import { ArrowLeftIcon, ArrowSquareOutIcon, BroadcastIcon, EyeSlashIcon, FloppyDiskIcon, ImageSquareIcon, RocketLaunchIcon, UploadSimpleIcon, XIcon } from '@phosphor-icons/react';
 import { adminApi, requestFailureMessage } from '@/src/lib/api';
 import { invalidateAfter } from '@/src/lib/adminQueries';
 import { contentTypeFor, contentTypeKey } from '@/src/components/admin/contentTypes';
@@ -26,6 +26,7 @@ import { AdminButton, adminButtonClass } from '@/src/components/ui/admin-button'
 import { AdminField, AdminInput, AdminSelect, AdminTextarea } from '@/src/components/ui/admin-field';
 import { AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-state';
 import { ConfirmDialog } from '@/src/components/ui/confirm-dialog';
+import { SaveDock } from '@/src/components/admin/SaveDock';
 import { FormSection } from '@/src/components/ui/form-section';
 import { Notice } from '@/src/components/ui/notice';
 import { PageHeader } from '@/src/components/ui/page-header';
@@ -219,8 +220,8 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
     router.push(href);
   };
 
-  const handleSubmit = async (event: React.FormEvent, publishOnCreate = false) => {
-    event.preventDefault();
+  const handleSubmit = async (event: React.SyntheticEvent | undefined, publishOnCreate = false) => {
+    event?.preventDefault();
     setFormError('');
     setNotice('');
     setFieldErrors({});
@@ -328,6 +329,9 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
   const hierarchy = post
     ? [post.subsection.topCategory?.name, post.subsection.name].filter(Boolean).join(' / ')
     : '';
+
+  const saveStatus = () =>
+    dirty ? 'You have unsaved changes.' : isCreate ? 'Nothing has been saved yet.' : 'Everything on this page is saved.';
 
   const heading = isCreate ? 'New post' : post ? `Edit “${post.title}”` : 'Edit post';
 
@@ -607,48 +611,52 @@ export function PostEditor({ mode, subsectionSlug, postSlug }: PostEditorProps) 
             </AdminField>
           </FormSection>
 
-          {/* Persistent save/publish area: fixed to the bottom of the viewport (not `sticky`,
-              because `body { overflow: hidden auto }` in src/app/globals.css:14 makes the body the
-              scroll container and a sticky bar then never leaves its natural position below the
-              fold), clear of the 240px sidebar and below the scrim/drawer/dialog stacking levels,
-              so an open mobile navigation drawer really does cover it. */}
-          <div
-            className="fixed inset-x-0 bottom-0 z-20 border-t border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-[var(--admin-gutter)] py-[var(--admin-space-3)] shadow-[var(--admin-shadow-bar)] min-[850px]:left-[var(--admin-sidebar-w)]"
-            data-slot="editor-save-bar"
-          >
-            <div className="mx-auto flex w-full max-w-[var(--admin-editor-max)] flex-wrap items-center gap-[var(--admin-space-3)]">
-            {isCreate ? (
-              <>
-                <AdminButton loading={saving} onClick={(event) => void handleSubmit(event, false)} variant="primary">
-                  Save as draft
-                </AdminButton>
-                <AdminButton loading={saving} onClick={(event) => void handleSubmit(event, true)} variant="secondary">
-                  Save and publish
-                </AdminButton>
-              </>
-            ) : (
-              <>
-                <AdminButton disabled={!dirty} loading={saving} type="submit" variant="primary">
-                  Save changes
-                </AdminButton>
-                <AdminButton loading={publishing} onClick={() => void handleTogglePublish()} variant={published ? 'secondary' : 'primary'}>
-                  {published ? 'Unpublish' : 'Publish'}
-                </AdminButton>
-              </>
-            )}
-            <p
-              aria-live="polite"
-              className="text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]"
-              data-slot="editor-save-state"
-            >
-              {dirty
-                ? 'You have unsaved changes.'
-                : isCreate
-                  ? 'Nothing has been saved yet.'
-                  : 'Everything on this page is saved.'}
-            </p>
-            </div>
-          </div>
+          {/* Persistent save/publish area: a floating morphing dock (src/components/admin
+              /SaveDock.tsx) - icon actions with the sliding indicator and the state as a signal
+              dot, centred above the viewport edge, clear of the 240px sidebar and below the
+              scrim/drawer/dialog stacking levels, so an open mobile navigation drawer really
+              does cover it. Accessible names are kept identical to the labelled bar so the e2e
+              suite's role-clicks resolve. */}
+          <SaveDock
+            actions={
+              isCreate
+                ? [
+                    {
+                      icon: FloppyDiskIcon,
+                      id: 'save-draft',
+                      label: 'Save as draft',
+                      loading: saving,
+                      onClick: () => void handleSubmit(undefined, false),
+                    },
+                    {
+                      icon: RocketLaunchIcon,
+                      id: 'save-publish',
+                      label: 'Save and publish',
+                      loading: saving,
+                      onClick: () => void handleSubmit(undefined, true),
+                    },
+                  ]
+                : [
+                    {
+                      disabled: !dirty,
+                      icon: FloppyDiskIcon,
+                      id: 'save-changes',
+                      label: 'Save changes',
+                      loading: saving,
+                      type: 'submit' as const,
+                    },
+                    {
+                      icon: published ? EyeSlashIcon : BroadcastIcon,
+                      id: 'publish-toggle',
+                      label: published ? 'Unpublish' : 'Publish',
+                      loading: publishing,
+                      onClick: handleTogglePublish,
+                    },
+                  ]
+            }
+            dirty={dirty}
+            status={saveStatus()}
+          />
         </div>
       </form>
     );

@@ -178,7 +178,7 @@ test.describe('content screens - headings, primary actions and seeded data', () 
     await expect(page.getByLabel('Bio')).toContainText('CodeMate');
 
     await expect(page.getByRole('button', { name: 'Save profile' })).toBeVisible();
-    await expect(page.getByText('Everything on this page is saved.')).toBeVisible();
+    await expect(page.locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'Everything on this page is saved.');
   });
 
   test('a failed dashboard request is reported instead of rendering zeros', async ({ page }) => {
@@ -206,7 +206,7 @@ test.describe('content screens - headings, primary actions and seeded data', () 
 
     await expect(adminMain(page).getByRole('alert')).toContainText('Profile service is down');
     await expect(page.getByLabel('Bio')).toHaveValue('A bio that will not save.');
-    await expect(page.getByText('Unsaved changes')).toBeVisible();
+    await expect(page.locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'Unsaved changes');
   });
 });
 
@@ -262,11 +262,11 @@ test.describe('profile save round-trip on the isolated database', () => {
       const marker = `Saved by Playwright ${Date.now()}`;
       await page.getByLabel('Bio').fill(marker);
       await page.getByLabel('X (Twitter)').fill('');
-      await expect(page.getByText('Unsaved changes')).toBeVisible();
+      await expect(page.locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'Unsaved changes');
 
       await page.getByRole('button', { name: 'Save profile' }).click();
       await expect(page.getByText('Profile saved.')).toBeVisible();
-      await expect(page.getByText('Everything on this page is saved.')).toBeVisible();
+      await expect(page.locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'Everything on this page is saved.');
 
       /* Deliberately not `waitUntil: 'networkidle'`: Chromium answers the first reload of this page
          from its cache, Playwright then waits for a network event that never arrives, and the

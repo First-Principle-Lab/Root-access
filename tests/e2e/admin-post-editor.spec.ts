@@ -112,18 +112,18 @@ test.describe('post editor - lifecycle per display style', () => {
         // The new row exists, is a draft, and is exactly one more than before.
         expect(await postCount(page)).toBe(before + 1);
         expect(await postCount(page, '&status=draft')).toBeGreaterThanOrEqual(1);
-        await expect(adminMain(page).getByText('Everything on this page is saved.')).toBeVisible();
+        await expect(adminMain(page).locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'Everything on this page is saved.');
         await expect(adminMain(page).getByText('Draft', { exact: true })).toBeVisible();
 
         // ---- edit ----
         const editedTitle = `${scenario.title} (edited)`;
         await page.getByLabel('Title').fill(editedTitle);
-        await expect(adminMain(page).getByText('You have unsaved changes.')).toBeVisible();
+        await expect(adminMain(page).locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'You have unsaved changes.');
         await page.getByRole('button', { name: 'Save changes' }).click();
         /* Renaming a post renames its address (the PUT regenerates the slug from the title) and the
            editor follows it; the old address is a "post not found" from here on. */
         await expect(page).toHaveURL(/-edited$/);
-        await expect(adminMain(page).getByText('Everything on this page is saved.')).toBeVisible();
+        await expect(adminMain(page).locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'Everything on this page is saved.');
 
         // ---- reload proves the edit is stored, not just in component state ----
         await page.reload();
@@ -137,7 +137,7 @@ test.describe('post editor - lifecycle per display style', () => {
         const tagBody = (await tagsResponse.json()) as { tags: Array<{ name: string }> };
         const seededTag = tagBody.tags[0]?.name ?? '';
         await page.getByLabel('Tags').fill(seededTag);
-        await expect(adminMain(page).getByText('You have unsaved changes.')).toBeVisible();
+        await expect(adminMain(page).locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'You have unsaved changes.');
         await page.getByRole('button', { name: 'Save changes' }).click();
         await expect(adminMain(page).getByText('Your changes are saved.')).toBeVisible();
         await page.reload();
@@ -269,7 +269,7 @@ test.describe('post editor - fields, preview and warnings', () => {
     await page.goto('/admin/posts/new');
     await page.getByLabel('Subsection').selectOption('engineering');
     await page.getByLabel('Title').fill(title);
-    await expect(adminMain(page).getByText('You have unsaved changes.')).toBeVisible();
+    await expect(adminMain(page).locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'You have unsaved changes.');
 
     await saveState(page).waitFor();
     await page.getByRole('button', { name: 'Back to posts' }).click();
@@ -312,7 +312,7 @@ test.describe('post editor - fields, preview and warnings', () => {
     // The typed values survive the failure, and the dirty marker is still on.
     await expect(page.getByLabel('Title')).toHaveValue(original);
     await expect(page.getByLabel('Tags')).toHaveValue('kept, after, failure');
-    await expect(adminMain(page).getByText('You have unsaved changes.')).toBeVisible();
+    await expect(adminMain(page).locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'You have unsaved changes.');
 
     // And the row really is unchanged on the server.
     await page.unroute('**/api/admin/subsections/**/posts/**');
@@ -338,7 +338,7 @@ test.describe('post editor - fields, preview and warnings', () => {
     await expect(page.getByLabel('Title')).toHaveValue(typedTitle);
     // The upload control is usable again rather than stuck in its busy state.
     await expect(page.getByRole('button', { name: 'Upload', exact: true })).toBeEnabled();
-    await expect(adminMain(page).getByText('You have unsaved changes.')).toBeVisible();
+    await expect(adminMain(page).locator('[data-slot="editor-save-state"]')).toHaveAttribute('title', 'You have unsaved changes.');
   });
 });
 

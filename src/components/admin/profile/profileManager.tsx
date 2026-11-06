@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ImageSquareIcon, TrashIcon, UploadSimpleIcon } from '@phosphor-icons/react';
+import { ArrowCounterClockwiseIcon, FloppyDiskIcon, ImageSquareIcon, TrashIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 import { adminApi, requestFailureMessage } from '@/src/lib/api';
 import { useAdminQuery } from '@/src/lib/adminQuery';
 import { adminQueryKeys, invalidateAfter, loadProfile } from '@/src/lib/adminQueries';
@@ -12,6 +12,7 @@ import { AdminErrorState, AdminLoadingState } from '@/src/components/ui/admin-st
 import { FormSection } from '@/src/components/ui/form-section';
 import { Notice } from '@/src/components/ui/notice';
 import { PageHeader } from '@/src/components/ui/page-header';
+import { SaveDock } from '@/src/components/admin/SaveDock';
 import {
   EMPTY_PROFILE_FORM,
   buildProfilePayload,
@@ -184,7 +185,7 @@ export function ProfileManager() {
       <PageHeader title="Profile" />
 
       <form
-        className="flex flex-col gap-[var(--admin-space-5)]"
+        className="flex flex-col gap-[var(--admin-space-5)] pb-32"
         /* The browser's own `type="url"` constraint bubble would answer before this form does, so a
            half-typed link would produce a native tooltip on one field and an inline message on the
            others. Every admin form reports through AdminField instead. */
@@ -342,29 +343,30 @@ export function ProfileManager() {
           </AdminField>
         </FormSection>
 
-        <div className="sticky bottom-0 -mx-[var(--admin-gutter)] flex flex-wrap items-center gap-[var(--admin-space-3)] border-t border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-[var(--admin-gutter)] py-[var(--admin-space-3)] shadow-[var(--admin-shadow-bar)]">
-          <AdminButton loading={saving} type="submit" variant="primary">
-            Save profile
-          </AdminButton>
-          <AdminButton
-            disabled={!dirty}
-            onClick={() => {
-              setValues(saved);
-              setFieldErrors({});
-              setFormError('');
-              setSavedNotice('');
-            }}
-            variant="ghost"
-          >
-            Discard changes
-          </AdminButton>
-          <p
-            aria-live="polite"
-            className="text-[length:var(--admin-text-micro)] text-[color:var(--admin-subtle)]"
-          >
-            {dirty ? 'Unsaved changes' : 'Everything on this page is saved.'}
-          </p>
-        </div>
+        {/* Save dock: the same morphing dock the post editor uses (src/components/admin
+            /SaveDock.tsx) - the full-bleed band stopped short of the viewport edge on wide
+            screens (review screenshot), and a text tray would just repeat that; the dock's
+            centred pill carries the icon actions and the `pb-32` above is the space it covers
+            at the bottom of the scroll. */}
+        <SaveDock
+          actions={[
+            { icon: FloppyDiskIcon, id: 'profile-save', label: 'Save profile', loading: saving, type: 'submit' as const },
+            {
+              disabled: !dirty,
+              icon: ArrowCounterClockwiseIcon,
+              id: 'profile-discard',
+              label: 'Discard changes',
+              onClick: () => {
+                setValues(saved);
+                setFieldErrors({});
+                setFormError('');
+                setSavedNotice('');
+              },
+            },
+          ]}
+          dirty={dirty}
+          status={dirty ? 'Unsaved changes' : 'Everything on this page is saved.'}
+        />
       </form>
     </>
   );
